@@ -1,0 +1,247 @@
+// Shoe Hustle data model.
+//
+// SQLite so the app runs with zero setup. Prisma's SQLite connector has no
+// native enums or arrays, so status-style columns are plain strings backed by
+// the constant lists in src/lib/constants.ts. Money is always integer cents.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("SELLER") // ADMIN | SELLER
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  // Storefront identity
+  handle String? @unique
+  bio    String?
+
+  // Stripe Connect. stripeReady flips true once onboarding completes.
+  stripeAccountId String?
+  stripeReady     Boolean @default(false)
+
+  // Pricing defaults, all in cents. Used by the buy calculator.
+  targetProfitCents Int @default(3000)
+  shipOutCents      Int @default(1200)
+  cleanCostCents    Int @default(800)
+  restoreCostCents  Int @default(1800)
+
+  // What the buyer pays for shipping, and what the platform takes from this
+  // seller's sales, in basis points (1100 = 11%).
+  buyerShippingCents Int @default(1200)
+  platformFeeBps     Int @default(0)
+
+  sessions       Session[]
+  channels       Channel[]
+  items          InventoryItem[]
+  orders         Order[]
+  invitesCreated Invite[]        @relation("InviteCreator")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Invite {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  email       String
+  name        String
+  role        String    @default("SELLER")
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  createdById String
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id])
+}
+
+// A selling channel and what it costs you. Whatnot, eBay and cash in hand are
+// three different numbers, and max buy price depends on which one you'd use.
+model Channel {
+  id            String  @id @default(cuid())
+  userId        String
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  feeBps        Int
+  fixedFeeCents Int     @default(0)
+  isDefault     Boolean @default(false)
+  sortOrder     Int     @default(0)
+
+  @@index([userId])
+}
+
+// A model/colorway in the catalog. One Shoe, many physical pairs.
+model Shoe {
+  id          String   @id @default(cuid())
+  brand       String
+  model       String
+  colorway    String?
+  styleCode   String?  @unique
+  nickname    String?
+  retailCents Int?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+
+  items InventoryItem[]
+  comps Comp[]
+
+  @@index([brand, model])
+}
+
+// A physical pair you own.
+model InventoryItem {
+  id       String @id @default(cuid())
+  shoeId   String
+  shoe     Shoe   @relation(fields: [shoeId], references: [id])
+  sellerId String
+  seller   User   @relation(fields: [sellerId], references: [id])
+
+  size     String
+  sizeType String @default("M") // M | W | GS | PS | TD
+  grade    String // DS | VNDS | G9 | G8 | G7 | G6
+  status   String @default("SOURCING")
+
+  costCents    Int       @default(0)
+  acquiredFrom String?
+  acquiredAt   DateTime?
+
+  // Asking price, plus what the calculator estimated in each lane.
+  listPriceCents   Int?
+  estAsIsCents     Int?
+  estCleanCents    Int?
+  estRestoredCents Int?
+
+  restorationEta   DateTime?
+  restorationNotes String?
+
+  notes     String?
+  soldAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  photos ItemPhoto[]
+  comps  Comp[]
+  orders Order[]
+
+  @@index([sellerId, status])
+  @@index([status, size])
+}
+
+model ItemPhoto {
+  id     String        @id @default(cuid())
+  itemId String
+  item   InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  url    String
+  sort   Int           @default(0)
+
+  @@index([itemId])
+}
+
+// A comparable sale. Entered by hand from a StockX/eBay/GOAT lookup, so it
+// carries the URL it came from and whether it was a real sale or just an ask.
+model Comp {
+  id         String         @id @default(cuid())
+  shoeId     String?
+  shoe       Shoe?          @relation(fields: [shoeId], references: [id], onDelete: Cascade)
+  itemId     String?
+  item       InventoryItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  source     String // STOCKX | EBAY | GOAT | GOOGLE | OTHER
+  kind       String // SOLD | ASK
+  priceCents Int
+  size       String?
+  grade      String?
+  url        String?
+  note       String?
+  capturedAt DateTime       @default(now())
+
+  @@index([shoeId])
+  @@index([itemId])
+}
+
+model Order {
+  id       String        @id @default(cuid())
+  ref      String        @unique
+  itemId   String
+  item     InventoryItem @relation(fields: [itemId], references: [id])
+  sellerId String
+  seller   User          @relation(fields: [sellerId], references: [id])
+
+  buyerEmail  String
+  buyerName   String
+  shipLine1   String?
+  shipLine2   String?
+  shipCity    String?
+  shipState   String?
+  shipPostal  String?
+  shipCountry String?
+
+  subtotalCents    Int
+  shippingCents    Int
+  taxCents         Int @default(0)
+  totalCents       Int
+  platformFeeCents Int @default(0)
+
+  status                String  @default("PENDING") // PENDING | PAID | SHIPPED | CANCELLED | REFUNDED
+  stripeSessionId       String? @unique
+  stripePaymentIntentId String?
+
+  trackingCarrier String?
+  trackingNumber  String?
+
+  createdAt DateTime  @default(now())
+  paidAt    DateTime?
+  shippedAt DateTime?
+
+  @@index([sellerId, status])
+}
+
+// Someone whose size wasn't in stock. This list is the whole point of the
+// storefront - it's the audience no platform can throttle.
+model SizeAlert {
+  id         String    @id @default(cuid())
+  email      String
+  size       String
+  sizeType   String    @default("M")
+  note       String?
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime?
+
+  @@index([size])
+}
+
+model RestorationRequest {
+  id              String    @id @default(cuid())
+  name            String
+  email           String
+  phone           String?
+  shoeDescription String
+  condition       String?
+  photoUrl        String?
+  status          String    @default("NEW") // NEW | QUOTED | ACCEPTED | IN_PROGRESS | DONE | DECLINED
+  quoteCents      Int?
+  etaDate         DateTime?
+  internalNotes   String?
+  createdAt       DateTime  @default(now())
+}
+
+// Global site config: shop name, tagline, contact line.
+model Setting {
+  key   String @id
+  value String
+}

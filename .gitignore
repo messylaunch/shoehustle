@@ -1,0 +1,29 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Environment — never commit real keys
+.env
+.env.local
+.env*.local
+
+# SQLite database and its journals
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+prisma/dev.db*
+
+# Uploaded shoe photos
+public/uploads/*
+!public/uploads/.gitkeep
+
+.DS_Store
+*.log
+npm-debug.log*
+.vercel
+tsconfig.tsbuildinfo
+next-env.d.ts
+coverage/
