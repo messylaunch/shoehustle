@@ -1,9 +1,10 @@
-# Shoe Hustle — Product Draft v0.1
+# Shoe Hustle — Product Draft v0.2
 
 A sourcing calculator that tells you your max buy price, bolted to a size-filterable
 storefront you can drop in a link in bio. One app, two very different jobs.
 
-Status: pre-build. Four open questions below block the first line of code.
+Status: decisions locked, building against them. Scope is a multi-seller marketplace with
+in-app checkout via Stripe Connect. See §9.
 
 ---
 
@@ -170,42 +171,66 @@ from a silhouette every time. Telling two similar colorways apart in bad phone l
 where it slips, and the wrong colorway can be off by 3×.
 → Guess from the photo for speed, offer the tongue-tag shot for certainty, always confirm.
 
-**The moment money flows through the app, you're a marketplace.** If another seller lists a
-pair and a stranger's card gets charged inside your app, you've taken on payouts, identity
-verification, chargebacks, and fraud. Biggest fork in the project.
-→ Phase 1 is a catalog with offers and contact handoff. Add checkout once traffic justifies
-the overhead.
+**You've chosen to be a marketplace, so here's the bill.** Josh lists a pair, a stranger's
+card gets charged, and the money has to reach Josh minus the platform's cut. That's Stripe
+Connect, and it drags in seller identity verification, payouts, refunds, chargebacks, and
+marketplace sales tax. The part that catches people out is onboarding: before a seller can
+be paid, Stripe needs legal name, SSN or EIN, date of birth, address, and bank account.
+→ Stripe Connect Express so Stripe hosts onboarding and carries the verification burden.
+Platform fee taken per sale. Stripe Tax on from the start rather than retrofitted.
 
 ---
 
-## 8. Build order
+## 8. Build order — three milestones
 
-Each phase is usable on its own.
+Both halves grow together. Sequencing is about what has to exist before the next thing
+works, not which half matters more.
 
-**Phase 1 — The calculator, single user.** Photo → identify → confirm → size + grade.
-Comps from legitimate sources plus manual entry. Max buy per channel with fee settings.
-Save to inventory with real cost basis.
+**Milestone 1 — The spine.** One shoe goes in the back and comes out the front; nothing
+charges a card yet. Photo → identify → confirm → size + grade. Comps from legitimate
+sources plus manual entry. Max buy per channel with fee settings. Save to inventory with
+real cost basis. Public storefront reading that same inventory, filtered by size. Per-shoe
+URL and share card.
 
-**Phase 2 — The public page.** Read-only, fast, no login to browse. Size-filtered grid.
-Per-shoe URL and share card. Condition badges and restoration ready-dates. Size alerts and
-restoration intake.
+**Milestone 2 — Checkout.** The whole payments layer, done once and properly. Stripe
+Connect Express onboarding. Card checkout with the platform fee split out automatically.
+Orders, shipping addresses, tracking, mark-as-shipped. Refunds and a written dispute
+policy. Stripe Tax. Inventory locks at payment so nothing sells twice.
 
-**Phase 3 — Money and holds.** Offers and reservations with a hold timer. Deposits on pairs
-still in restoration. Checkout if Phase 2 traffic justifies it.
-
-**Phase 4 — Multi-seller.** Invited sellers with their own logins and inventory. One
-combined storefront, filterable by seller. Whatever cut or flat fee the arrangement calls
-for.
+**Milestone 3 — The network and the list.** Invited sellers with their own logins,
+inventory, and payouts. One combined storefront, filterable by seller. Size alerts.
+Restoration intake with quotes and turnaround dates. Deposits on pairs still in
+restoration.
 
 ---
 
-## 9. Open questions
+## 9. Decisions
 
-1. **Which half first?** Calculator (useful with one user and zero traffic, fills the
-   inventory the storefront needs) vs. storefront vs. thin slices of both.
-2. **How do we identify the shoe?** Photo-only AI guess (fastest, least accurate) vs. style
-   code from the tongue tag (one extra photo, near-exact) vs. search-and-pick from a
-   catalog (boring, never wrong).
-3. **How does money change hands?** Catalog with off-app close (fastest, near-zero
-   liability) vs. deposits-only vs. full in-app checkout.
-4. **Who gets to list?** Just you vs. invited sellers vs. open signup.
+| Decision | Call | What it costs us |
+| --- | --- | --- |
+| Build order | Both halves, thin | Longer to first usable thing, but the storefront is live while the calculator is still being learned |
+| Shoe ID | Photo guess + optional tag shot | Nothing meaningful — vision cost per lookup is fractions of a cent |
+| Payments | Full in-app checkout | Biggest single line item. Connect onboarding, orders, shipping, refunds, tax |
+| Sellers | Invited sellers | Auth, roles, per-seller inventory and payouts from day one |
+
+### What checkout adds that isn't obvious
+
+- **Seller onboarding is a real gate.** Stripe needs legal name, SSN or EIN, DOB, address,
+  and bank account before anyone gets paid.
+- **Buyers will ask where their shoe is.** Orders need shipping addresses, tracking, and a
+  status a buyer can check without messaging anyone.
+- **Chargebacks land on the platform.** Stripe pulls from the platform; the platform
+  recovers from the seller. Get that in writing before the first sale, not after the first
+  dispute.
+- **One pair, one buyer.** Inventory must lock at payment. Two buyers on the same pair
+  thirty seconds apart is the failure that costs a customer.
+- **Sales tax.** Marketplace facilitator rules mean the platform collects. Stripe Tax
+  handles it if enabled from the start.
+
+### Proceeding on assumption
+
+Two numbers needed eventually, not blocking. Both are configurable settings rather than
+baked into code.
+
+- **Platform fee** defaults to 0% until a number is agreed with each seller.
+- **Shipping** charged to the buyer at a flat rate set per seller.
