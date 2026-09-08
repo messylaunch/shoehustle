@@ -41,10 +41,17 @@ model User {
   buyerShippingCents Int @default(1200)
   platformFeeBps     Int @default(0)
 
+  // Affiliate side. A reseller shares /r/<handle>; sales through that link
+  // pay them commissionBps of the margin (list price minus cost), and they
+  // can also buy any pair at its reseller price and sell it themselves.
+  isReseller    Boolean @default(false)
+  commissionBps Int     @default(3000)
+
   sessions       Session[]
   channels       Channel[]
   items          InventoryItem[]
   orders         Order[]
+  referredOrders Order[]         @relation("OrderReseller")
   invitesCreated Invite[]        @relation("InviteCreator")
 }
 
@@ -127,17 +134,33 @@ model InventoryItem {
   estCleanCents    Int?
   estRestoredCents Int?
 
+  // What a reseller in the network pays for this pair. The gap between this
+  // and listPriceCents is their margin if they sell it themselves.
+  resellerPriceCents Int?
+
+  // What the pair goes for new, shown to buyers so they can see the deal.
+  marketNewCents Int?
+
+  // Honesty about what's wrong with it. Comma-separated flaw codes from
+  // src/lib/constants.ts, plus anything that needs saying in words.
+  flaws     String?
+  flawNotes String?
+
   restorationEta   DateTime?
   restorationNotes String?
+  // What was actually done to it — becomes the "how it was treated" list
+  // on the public page.
+  treatments String?
 
   notes     String?
   soldAt    DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  photos ItemPhoto[]
-  comps  Comp[]
-  orders Order[]
+  photos   ItemPhoto[]
+  comps    Comp[]
+  orders   Order[]
+  auctions Auction[]
 
   @@index([sellerId, status])
   @@index([status, size])
@@ -197,6 +220,12 @@ model Order {
   totalCents       Int
   platformFeeCents Int @default(0)
 
+  // Set when the buyer arrived through a reseller's link. resellerCutCents
+  // is what that reseller earned on the sale.
+  resellerId       String?
+  reseller         User?   @relation("OrderReseller", fields: [resellerId], references: [id])
+  resellerCutCents Int     @default(0)
+
   status                String  @default("PENDING") // PENDING | PAID | SHIPPED | CANCELLED | REFUNDED
   stripeSessionId       String? @unique
   stripePaymentIntentId String?
@@ -213,16 +242,70 @@ model Order {
 
 // Someone whose size wasn't in stock. This list is the whole point of the
 // storefront - it's the audience no platform can throttle.
+//
+// One row per size per person, so a parent can watch their own size and each
+// of their kids' sizes separately.
 model SizeAlert {
   id         String    @id @default(cuid())
   email      String
   size       String
   sizeType   String    @default("M")
+  // Who they're watching this size for: "me", "my son", "my daughter"...
+  forWho     String?
   note       String?
   createdAt  DateTime  @default(now())
   notifiedAt DateTime?
 
   @@index([size])
+}
+
+// The weekly drop. One hot pair, a countdown, and public bidding. It exists
+// to give people a reason to come back on a schedule.
+model Auction {
+  id         String        @id @default(cuid())
+  itemId     String
+  item       InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  title      String?
+  startCents Int
+  // Below this, you don't have to sell. Hidden from bidders.
+  reserveCents Int?
+  // Smallest allowed raise over the current high bid.
+  incrementCents Int      @default(500)
+  startsAt       DateTime @default(now())
+  endsAt         DateTime
+  status         String   @default("LIVE") // LIVE | CLOSED | CANCELLED
+  createdAt      DateTime @default(now())
+
+  bids Bid[]
+
+  @@index([status, endsAt])
+}
+
+model Bid {
+  id          String   @id @default(cuid())
+  auctionId   String
+  auction     Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  bidderEmail String
+  bidderName  String
+  amountCents Int
+  createdAt   DateTime @default(now())
+
+  @@index([auctionId, amountCents])
+}
+
+// A browser that asked for push notifications. Endpoint is unique per
+// device per site; keys are what the push service needs to encrypt to it.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  // Optional link back to a shopper, so we can target their sizes.
+  email     String?
+  createdAt DateTime @default(now())
+  failedAt  DateTime?
+
+  @@index([email])
 }
 
 model RestorationRequest {

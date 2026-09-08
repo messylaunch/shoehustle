@@ -6,12 +6,17 @@ import { prisma } from "@/lib/db";
 import { centsToInput, formatBps, formatCents } from "@/lib/money";
 import {
   COMP_SOURCES,
+  FLAWS,
   GRADES,
   ITEM_STATUSES,
   SIZE_TYPES,
+  TREATMENTS,
   compSourceLabel,
   gradeByCode,
+  parseFlaws,
+  parseTreatments,
 } from "@/lib/constants";
+import { hasPushKeys } from "@/lib/config";
 import {
   bestLane,
   buildLanes,
@@ -27,6 +32,7 @@ import {
   deleteCompAction,
   deleteItemAction,
   deletePhotoAction,
+  notifySizeAction,
   saveEstimatesAction,
   updateItemAction,
 } from "../../actions";
@@ -38,7 +44,12 @@ export default async function ItemPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ channel?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{
+    channel?: string;
+    saved?: string;
+    error?: string;
+    notified?: string;
+  }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -91,6 +102,11 @@ export default async function ItemPage({
   const verdict = verdictFor(item.costCents > 0 ? item.costCents : null, lanes);
   const grade = gradeByCode(item.grade);
   const links = researchLinks(item.shoe, { size: item.size });
+  const selectedFlaws = parseFlaws(item.flaws);
+  const selectedTreatments = parseTreatments(item.treatments);
+
+  // How many people are waiting on this size — the reason to hit "tell them".
+  const watching = await prisma.sizeAlert.count({ where: { size: item.size } });
 
   const actualProfit =
     best && best.sellCents !== null && item.costCents > 0
@@ -130,6 +146,42 @@ export default async function ItemPage({
       </div>
 
       {sp.saved ? <Notice kind="good">Saved.</Notice> : null}
+      {sp.notified ? (
+        <Notice kind="good">
+          Sent to {sp.notified}{" "}
+          {sp.notified === "1" ? "person" : "people"} watching size {item.size}.
+        </Notice>
+      ) : null}
+      {sp.error === "nopush" ? (
+        <Notice kind="warn" title="Notifications aren't switched on">
+          Run <code>npm run push:keys</code> and add the two values to your{" "}
+          <code>.env</code> file.
+        </Notice>
+      ) : null}
+
+      {item.status === "LISTED" && watching > 0 ? (
+        <div className="notice notice-good">
+          <strong>
+            {watching} {watching === 1 ? "person is" : "people are"} watching
+            size {item.size}
+          </strong>
+          <form action={notifySizeAction} style={{ marginTop: "0.5rem" }}>
+            <input type="hidden" name="itemId" value={item.id} />
+            <button
+              className="btn btn-small btn-primary"
+              type="submit"
+              disabled={!hasPushKeys}
+            >
+              Tell them it&apos;s here
+            </button>
+            {!hasPushKeys ? (
+              <span className="tiny" style={{ marginLeft: "0.5rem" }}>
+                Needs push notifications switched on.
+              </span>
+            ) : null}
+          </form>
+        </div>
+      ) : null}
       {sp.error === "hasorders" ? (
         <Notice kind="bad" title="Can't delete this one">
           Someone has paid for this pair. Cancel or refund the order first.
@@ -592,6 +644,76 @@ export default async function ItemPage({
 
           <Field label="Listing description" hint="Shows on the public page.">
             <textarea name="notes" defaultValue={item.notes ?? ""} />
+          </Field>
+
+          <Field
+            label="What a new pair costs"
+            hint="Shown struck through next to your price, so buyers can see the deal."
+          >
+            <input
+              name="marketNew"
+              inputMode="decimal"
+              defaultValue={centsToInput(item.marketNewCents)}
+              placeholder={
+                item.shoe.retailCents ? centsToInput(item.shoe.retailCents) : "210.00"
+              }
+            />
+          </Field>
+
+          <hr />
+
+          <h3 style={{ marginTop: 0 }}>What you did to them</h3>
+          <p className="small muted">
+            This is the pitch. Not &quot;used shoes&quot; — shoes somebody who
+            knows how has already looked after.
+          </p>
+          <div className="cols-2">
+            {TREATMENTS.map((t) => (
+              <label key={t.code} className="small" style={{ fontWeight: 400 }}>
+                <input
+                  type="checkbox"
+                  name="treatments"
+                  value={t.code}
+                  defaultChecked={selectedTreatments.includes(t.code)}
+                  style={{ width: "auto", marginRight: "0.4rem" }}
+                />
+                {t.label}
+              </label>
+            ))}
+          </div>
+
+          <hr />
+
+          <h3 style={{ marginTop: 0 }}>What isn&apos;t perfect</h3>
+          <p className="small muted">
+            Tick everything that applies. A buyer who was told up front bought
+            them anyway; a buyer who found out from the box wants a refund and
+            never comes back.
+          </p>
+          <div className="cols-2">
+            {FLAWS.map((f) => (
+              <label key={f.code} className="small" style={{ fontWeight: 400 }}>
+                <input
+                  type="checkbox"
+                  name="flaws"
+                  value={f.code}
+                  defaultChecked={selectedFlaws.includes(f.code)}
+                  style={{ width: "auto", marginRight: "0.4rem" }}
+                />
+                {f.label}
+              </label>
+            ))}
+          </div>
+
+          <Field
+            label="Anything else worth saying"
+            hint="Shows in the honest-bit box on the public page."
+          >
+            <input
+              name="flawNotes"
+              defaultValue={item.flawNotes ?? ""}
+              placeholder="Small mark on the left toe that wouldn't come out"
+            />
           </Field>
 
           <button className="btn btn-primary" type="submit">

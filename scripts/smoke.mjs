@@ -3,7 +3,19 @@
 //
 // Server actions redirect, so every assertion polls for the expected text
 // rather than reading the DOM straight after a click.
-import { chromium } from "playwright";
+// Playwright is a heavy dev-only dependency, so it isn't in package.json.
+// Install it locally (npm i -D playwright) or point PLAYWRIGHT_MODULE at a
+// global copy.
+const playwright = await import(
+  process.env.PLAYWRIGHT_MODULE ?? "playwright"
+).catch(() => {
+  console.error(
+    "Couldn't load Playwright. Run `npm i -D playwright && npx playwright install chromium`,\n" +
+      "or set PLAYWRIGHT_MODULE to a global install's index.mjs.",
+  );
+  process.exit(1);
+});
+const { chromium } = playwright;
 
 // Point BASE at a running instance; SMOKE_OUT is where screenshots land.
 const BASE = process.env.SMOKE_BASE ?? "http://localhost:3100";
@@ -155,7 +167,91 @@ try {
   await page.click('form:has(#r-name) button[type="submit"]');
   await expectText("Got it", "restoration enquiry submitted");
 
-  // 11. Remaining seller pages render.
+  // 11. Flaws and treatments show on the public page, honestly labelled.
+  await page.goto(`${BASE}/app/inventory`);
+  await page.click("table tbody tr td a");
+  await page.waitForSelector('input[name="flaws"][value="NO_INSOLES"]');
+  await page.check('input[name="flaws"][value="NO_INSOLES"]');
+  await page.check('input[name="flaws"][value="SCUFFS"]');
+  await page.check('input[name="treatments"][value="DEEP_CLEAN"]');
+  await page.fill('input[name="flawNotes"]', "Small mark on the left toe");
+  await page.fill('input[name="marketNew"]', "210");
+  await page.click('form:has(select[name="status"]) button[type="submit"]');
+  await expectText("Saved", "flaws and treatments saved");
+
+  const itemUrl = page.url().replace("/app/inventory/", "/shoe/").split("?")[0];
+  await page.goto(itemUrl);
+  await expectText("What isn't perfect", "public page owns up to the flaws");
+  await expectText("No insoles", "each flaw is named");
+  await expectText("Small mark on the left toe", "free-text flaw note shows");
+  await expectText("What I did to them", "treatments show as the pitch");
+  await expectText("Check what these go for", "buyer can check the market price");
+  await page.screenshot({ path: `${OUT}/shot-honest.png`, fullPage: true });
+
+  // 12. Turn the admin into a reseller and follow their link.
+  await page.goto(`${BASE}/app/sellers`);
+  await page.check('input[name="isReseller"]');
+  await page.fill('input[name="handle"]', "mike");
+  await page.fill('input[name="commissionPercent"]', "30");
+  await page.click('form:has(input[name="isReseller"]) button[type="submit"]');
+  await expectText("Saved", "reseller switched on");
+
+  await page.goto(`${BASE}/app/network`);
+  await expectText("/r/mike", "reseller link is shown");
+  await expectText("There are two ways to earn", "both earning routes explained");
+  await page.screenshot({ path: `${OUT}/shot-network.png` });
+
+  await page.goto(`${BASE}/r/mike`);
+  await expectUrl(`${BASE}/`, "referral link lands on the shop");
+  await expectText("Shopping with", "referral is attributed to the reseller");
+
+  // 13. Run a drop and bid on it.
+  await page.goto(`${BASE}/app/drops`);
+  const closes = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 16);
+  await page.fill('input[name="startPrice"]', "25");
+  await page.fill('input[name="increment"]', "5");
+  await page.fill('input[name="endsAt"]', closes);
+  await page.click('form:has(select[name="itemId"]) button[type="submit"]');
+  await expectText("Drop is live", "drop created");
+
+  await page.goto(BASE);
+  await expectText("This week's drop", "drop is promoted on the shop");
+  await page.click('a[href^="/drop/"]');
+  await expectText("Next bid", "drop page invites a bid");
+
+  await page.fill("#bid-name", "Dana Reed");
+  await page.fill("#bid-email", "dana@example.com");
+  await page.fill("#bid-amount", "25");
+  await page.click('form:has(#bid-amount) button[type="submit"]');
+  await expectText("Bid's in", "bid accepted");
+  await expectText("winning", "bid shows as winning");
+
+  // A bid under the increment must bounce.
+  await page.fill("#bid-name", "Sam Cole");
+  await page.fill("#bid-email", "sam@example.com");
+  await page.fill("#bid-amount", "26");
+  await page.click('form:has(#bid-amount) button[type="submit"]');
+  await expectText("Bids start at \\$30\\.00", "under-increment bid rejected");
+  await page.screenshot({ path: `${OUT}/shot-drop.png`, fullPage: true });
+
+  // 14. PWA manifest is served and points at real icons.
+  const manifestRes = await page.goto(`${BASE}/manifest.webmanifest`);
+  const manifest = JSON.parse(await manifestRes.text());
+  if (!manifest.icons?.length || manifest.display !== "standalone") {
+    throw new Error("manifest is not installable");
+  }
+  for (const icon of manifest.icons) {
+    const iconRes = await page.goto(`${BASE}${icon.src}`);
+    if (!iconRes || iconRes.status() !== 200) {
+      throw new Error(`icon ${icon.src} returned ${iconRes?.status()}`);
+    }
+  }
+  passed++;
+  console.log("OK  PWA manifest and every icon it names are served");
+
+  // 15. Remaining seller pages render.
   for (const path of [
     "/app",
     "/app/playbook",
@@ -163,6 +259,9 @@ try {
     "/app/sellers",
     "/app/orders",
     "/app/inventory",
+    "/app/network",
+    "/app/drops",
+    "/app/guide",
   ]) {
     const res = await page.goto(`${BASE}${path}`);
     if (!res || res.status() >= 400) {

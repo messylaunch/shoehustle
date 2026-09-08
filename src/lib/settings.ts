@@ -13,9 +13,11 @@ export interface SiteSettings {
   restorationBlurb: string;
 }
 
+// The name is a starting point, not a decision you're stuck with — change
+// any of this on /app/settings without touching code.
 const DEFAULTS: SiteSettings = {
-  shopName: "Shoe Hustle",
-  tagline: "Cleaned, restored and deadstock pairs. Find your size.",
+  shopName: "Well Kept",
+  tagline: "Secondhand sneakers, properly looked after. Find your size.",
   contactLine: "Message me and I'll get back to you the same day.",
   contactUrl: "",
   restorationBlurb:

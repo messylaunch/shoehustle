@@ -6,6 +6,9 @@ import { formatCents } from "@/lib/money";
 import { formatSize, PUBLIC_STATUSES } from "@/lib/constants";
 import { shoeName } from "@/lib/research";
 import { getSettings } from "@/lib/settings";
+import { referringReseller } from "@/lib/referral";
+import { auctionState, highBid, timeRemaining } from "@/lib/auction";
+import InstallPrompt from "@/components/InstallPrompt";
 import { sizeAlertAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +24,18 @@ export default async function StorefrontPage({
   const params = await searchParams;
   const activeSize = params.size?.trim() || null;
   const settings = await getSettings();
+  const referrer = await referringReseller();
+
+  // The weekly drop, if one is running. It's the reason to come back.
+  const liveAuction = await prisma.auction.findFirst({
+    where: { status: "LIVE", endsAt: { gt: new Date() } },
+    include: {
+      item: { include: { shoe: true, photos: { take: 1, orderBy: { sort: "asc" } } } },
+      bids: true,
+    },
+    orderBy: { endsAt: "asc" },
+  });
+  const auctionTop = liveAuction ? highBid(liveAuction.bids) : null;
 
   const items = await prisma.inventoryItem.findMany({
     where: {
@@ -46,10 +61,46 @@ export default async function StorefrontPage({
       <h1>{settings.shopName}</h1>
       <p className="muted">{settings.tagline}</p>
 
+      {referrer ? (
+        <p className="tiny">
+          Shopping with <strong>{referrer.name}</strong>
+        </p>
+      ) : null}
+
       {params.alert === "ok" ? (
         <Notice kind="good" title="You're on the list">
           I'll message you the moment something lands in your size.
         </Notice>
+      ) : null}
+
+      {liveAuction && auctionState(liveAuction) === "LIVE" ? (
+        <>
+          <h2>This week&apos;s drop</h2>
+          <Link
+            href={`/drop/${liveAuction.id}`}
+            className="card"
+            style={{ display: "block", textDecoration: "none", color: "inherit" }}
+          >
+            <div className="spread">
+              <div>
+                <strong>
+                  {liveAuction.title || shoeName(liveAuction.item.shoe)}
+                </strong>
+                <div className="small muted">
+                  {formatSize(liveAuction.item.size, liveAuction.item.sizeType)} ·{" "}
+                  {auctionTop
+                    ? `${formatCents(auctionTop.amountCents)} — ${liveAuction.bids.length} ${
+                        liveAuction.bids.length === 1 ? "bid" : "bids"
+                      }`
+                    : `Opens at ${formatCents(liveAuction.startCents)}`}
+                </div>
+              </div>
+              <span className="badge badge-warn">
+                {timeRemaining(liveAuction.endsAt)}
+              </span>
+            </div>
+          </Link>
+        </>
       ) : null}
 
       {sizes.length > 0 ? (
@@ -127,8 +178,9 @@ export default async function StorefrontPage({
       <h2>Not your size?</h2>
       <div className="card">
         <p className="small muted">
-          Tell me what you wear and I'll message you the moment a pair lands.
-          No spam, no list rental — just a heads up when your size drops.
+          Every pair here is one-of-one, so sizes come and go. Tell me what you
+          wear and I'll message you when yours lands. Shopping for someone
+          else too? Add their size and I'll watch that as well.
         </p>
         <form action={sizeAlertAction}>
           <div className="cols-2">
@@ -143,7 +195,7 @@ export default async function StorefrontPage({
               />
             </div>
             <div className="field">
-              <label htmlFor="alert-size">Your size</label>
+              <label htmlFor="alert-size">Size</label>
               <input
                 id="alert-size"
                 type="text"
@@ -154,20 +206,41 @@ export default async function StorefrontPage({
               />
             </div>
           </div>
-          <div className="field">
-            <label htmlFor="alert-note">Anything you're hunting for?</label>
-            <input
-              id="alert-note"
-              type="text"
-              name="note"
-              placeholder="Jordan 4s, anything New Balance, under $80…"
-            />
+          <div className="cols-2">
+            <div className="field">
+              <label htmlFor="alert-for">Who's it for?</label>
+              <select id="alert-for" name="forWho" defaultValue="me">
+                <option value="me">Me</option>
+                <option value="my son">My son</option>
+                <option value="my daughter">My daughter</option>
+                <option value="my partner">My partner</option>
+                <option value="a gift">A gift</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="alert-note">Anything you're hunting for?</label>
+              <input
+                id="alert-note"
+                type="text"
+                name="note"
+                placeholder="Jordan 4s, anything under $60…"
+              />
+            </div>
           </div>
           <button className="btn btn-primary" type="submit">
-            Tell me when my size drops
+            Tell me when this size drops
           </button>
+          <p className="tiny" style={{ marginTop: "0.5rem", marginBottom: 0 }}>
+            Add the form again for each size you want watched.
+          </p>
         </form>
       </div>
+
+      <h2>Get it first</h2>
+      <InstallPrompt
+        vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null}
+        shopName={settings.shopName}
+      />
 
       <h2>Beat-up pair you still love?</h2>
       <div className="card">

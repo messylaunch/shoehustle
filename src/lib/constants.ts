@@ -181,6 +181,104 @@ export function compSourceLabel(code: string) {
   return COMP_SOURCES.find((s) => s.code === code)?.label ?? code;
 }
 
+// Honesty about secondhand shoes. A buyer who finds a surprise in the box
+// asks for a refund and never comes back; a buyer who was told up front
+// bought it anyway. Every one of these shows on the public page.
+export const FLAWS = [
+  {
+    code: "NO_INSOLES",
+    label: "No insoles",
+    blurb: "Comes without insoles — you'll want to add your own.",
+  },
+  {
+    code: "REPLACED_INSOLES",
+    label: "Replacement insoles",
+    blurb: "Fitted with new aftermarket insoles, not the originals.",
+  },
+  {
+    code: "SCUFFS",
+    label: "Scuffs that didn't come out",
+    blurb: "Marks that survived cleaning. Not repainted.",
+  },
+  {
+    code: "CREASING",
+    label: "Creasing",
+    blurb: "Toe box creasing from normal wear.",
+  },
+  {
+    code: "YELLOWING",
+    label: "Some yellowing",
+    blurb: "Midsole or outsole hasn't come all the way back to white.",
+  },
+  {
+    code: "GLUE",
+    label: "Reglued",
+    blurb: "A separated section has been glued back down.",
+  },
+  {
+    code: "NO_BOX",
+    label: "No original box",
+    blurb: "Ships protected, just not in its own box.",
+  },
+  {
+    code: "MISMATCHED_LACES",
+    label: "Replacement laces",
+    blurb: "Fresh laces, not the originals.",
+  },
+  {
+    code: "HEEL_WEAR",
+    label: "Heel drag",
+    blurb: "Worn down at the back of the sole.",
+  },
+  {
+    code: "MARKS_INSIDE",
+    label: "Marks inside",
+    blurb: "Wear on the lining or footbed you'd only see with them off.",
+  },
+] as const;
+
+export type FlawCode = (typeof FLAWS)[number]["code"];
+
+export function flawByCode(code: string) {
+  return FLAWS.find((f) => f.code === code);
+}
+
+/** Flaw codes are stored comma-separated on the item. */
+export function parseFlaws(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((c) => c.trim())
+    .filter((c) => c && FLAWS.some((f) => f.code === c));
+}
+
+// What was actually done to a pair. This is the pitch: not "used shoes",
+// but shoes somebody who knows how has already looked after.
+export const TREATMENTS = [
+  { code: "DEEP_CLEAN", label: "Deep cleaned", blurb: "Uppers, midsoles and outsoles by hand." },
+  { code: "WASHED", label: "Machine washed", blurb: "Run through on a protected cycle." },
+  { code: "DECREASED", label: "Creases pulled", blurb: "Steamed and shaped to take the creasing down." },
+  { code: "SOLE_WHITENED", label: "Soles brightened", blurb: "Midsoles treated to lift the yellowing." },
+  { code: "RECONDITIONED", label: "Leather conditioned", blurb: "Fed and buffed so it doesn't crack." },
+  { code: "SUEDE_BRUSHED", label: "Suede restored", blurb: "Brushed back up and the nap lifted." },
+  { code: "PROTECTED", label: "Water repellent applied", blurb: "Sprayed so the next spill wipes off." },
+  { code: "REGLUED", label: "Reglued", blurb: "Loose sections bonded back down properly." },
+  { code: "NEW_LACES", label: "Fresh laces", blurb: "New laces fitted." },
+  { code: "NEW_INSOLES", label: "New insoles", blurb: "Clean insoles fitted." },
+] as const;
+
+export function treatmentByCode(code: string) {
+  return TREATMENTS.find((t) => t.code === code);
+}
+
+export function parseTreatments(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((c) => c.trim())
+    .filter((c) => c && TREATMENTS.some((t) => t.code === c));
+}
+
 /** Default selling channels created for every new seller. */
 export const DEFAULT_CHANNELS = [
   { name: "Whatnot", feeBps: 1100, fixedFeeCents: 0, isDefault: true, sortOrder: 0 },

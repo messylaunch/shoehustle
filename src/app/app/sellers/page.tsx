@@ -6,6 +6,7 @@ import { formatBps } from "@/lib/money";
 import {
   inviteSellerAction,
   revokeInviteAction,
+  setResellerAction,
   setSellerFeeAction,
   toggleSellerActiveAction,
 } from "../actions";
@@ -55,6 +56,15 @@ export default async function SellersPage({
       {sp.error === "missing" ? (
         <Notice kind="bad">An invite needs a name and an email.</Notice>
       ) : null}
+      {sp.error === "handle" ? (
+        <Notice kind="bad">
+          A reseller needs a handle — letters, numbers and dashes, at least two
+          characters. It goes in their link.
+        </Notice>
+      ) : null}
+      {sp.error === "handletaken" ? (
+        <Notice kind="bad">Somebody already has that handle.</Notice>
+      ) : null}
 
       <h2>People selling</h2>
       <div className="stack">
@@ -89,6 +99,39 @@ export default async function SellersPage({
                 your cut {formatBps(seller.platformFeeBps)}
               </span>
             </div>
+
+            <form action={setResellerAction} style={{ marginTop: "0.7rem" }}>
+              <input type="hidden" name="id" value={seller.id} />
+              <label className="small" style={{ fontWeight: 400 }}>
+                <input
+                  type="checkbox"
+                  name="isReseller"
+                  defaultChecked={seller.isReseller}
+                  style={{ width: "auto", marginRight: "0.4rem" }}
+                />
+                Can resell — gets their own link and earns a share
+              </label>
+              <div className="cols-2" style={{ marginTop: "0.5rem" }}>
+                <Field label="Handle" hint="Their link: /r/handle">
+                  <input
+                    name="handle"
+                    defaultValue={seller.handle ?? ""}
+                    placeholder="josh"
+                  />
+                </Field>
+                <Field label="Their share of the margin">
+                  <input
+                    name="commissionPercent"
+                    inputMode="decimal"
+                    defaultValue={(seller.commissionBps / 100).toString()}
+                    placeholder="30"
+                  />
+                </Field>
+              </div>
+              <button className="btn btn-small" type="submit">
+                Save reseller settings
+              </button>
+            </form>
 
             <div className="row" style={{ marginTop: "0.7rem" }}>
               <form action={setSellerFeeAction} className="row">

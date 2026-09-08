@@ -7,13 +7,20 @@ import { prisma } from "@/lib/db";
 import { canTakePayments } from "@/lib/config";
 import { formatCents } from "@/lib/money";
 import {
+  flawByCode,
   formatSize,
   gradeByCode,
   isBuyableStatus,
   isPublicStatus,
+  parseFlaws,
+  parseTreatments,
   sizeTypeLabel,
+  treatmentByCode,
 } from "@/lib/constants";
-import { shoeName } from "@/lib/research";
+import { researchLinks, shoeName } from "@/lib/research";
+import { resellerPriceCents } from "@/lib/affiliate";
+import { currentUser } from "@/lib/auth";
+import { referringReseller } from "@/lib/referral";
 import { getSettings } from "@/lib/settings";
 import { checkoutAction } from "@/app/actions";
 
@@ -84,6 +91,31 @@ export default async function ShoePage({
   const buyable = isBuyableStatus(item.status) && (item.listPriceCents ?? 0) > 0;
   const paymentsOn = canTakePayments() && item.seller.stripeReady;
 
+  const flaws = parseFlaws(item.flaws);
+  const treatments = parseTreatments(item.treatments);
+  const [viewer, referrer] = await Promise.all([
+    currentUser(),
+    referringReseller(),
+  ]);
+
+  // What someone in the network pays for this pair. Only shown to a signed-in
+  // reseller — a shopper seeing a lower price than the one they're being
+  // asked for is a bad experience, not a sales tool.
+  const networkPrice =
+    viewer?.isReseller && item.listPriceCents
+      ? resellerPriceCents(
+          item.listPriceCents,
+          item.costCents,
+          viewer.commissionBps,
+        )
+      : null;
+
+  // The "here's the deal" links. Google Shopping and StockX show what the
+  // pair goes for new, so the discount is visible rather than claimed.
+  const valueLinks = researchLinks(item.shoe, { size: item.size }).filter((l) =>
+    ["StockX", "Google Shopping", "GOAT"].includes(l.label),
+  );
+
   const checkoutMessage: Record<string, { kind: "warn" | "bad"; text: string }> =
     {
       cancelled: { kind: "warn", text: "Checkout cancelled — the pair is still here." },
@@ -106,6 +138,12 @@ export default async function ShoePage({
       </p>
 
       {message ? <Notice kind={message.kind}>{message.text}</Notice> : null}
+
+      {referrer ? (
+        <p className="tiny">
+          Shopping with <strong>{referrer.name}</strong>
+        </p>
+      ) : null}
 
       <h1>{shoeName(item.shoe)}</h1>
 
@@ -131,7 +169,26 @@ export default async function ShoePage({
 
       <h2>
         {item.status === "SOLD" ? "Sold" : formatCents(item.listPriceCents)}
+        {item.marketNewCents && item.status !== "SOLD" ? (
+          <span
+            className="muted"
+            style={{ fontSize: "1rem", fontWeight: 400, marginLeft: "0.5rem" }}
+          >
+            <s>{formatCents(item.marketNewCents)}</s> new
+          </span>
+        ) : null}
       </h2>
+
+      {networkPrice !== null ? (
+        <Notice kind="info" title={`Your price: ${formatCents(networkPrice)}`}>
+          <span className="small">
+            That&apos;s what you pay as a reseller. Sell it on at{" "}
+            {formatCents(item.listPriceCents)} and you keep{" "}
+            {formatCents((item.listPriceCents ?? 0) - networkPrice)}. Or just
+            share your link and earn the same without touching the shoe.
+          </span>
+        </Notice>
+      ) : null}
 
       {item.status === "IN_RESTORATION" ? (
         <Notice kind="warn" title="Being restored right now">
@@ -166,6 +223,84 @@ export default async function ShoePage({
         {item.notes ? <p className="small">{item.notes}</p> : null}
       </div>
 
+      {treatments.length > 0 ? (
+        <>
+          <h3>What I did to them</h3>
+          <div className="card">
+            <ul className="tight" style={{ marginBottom: 0 }}>
+              {treatments.map((code) => {
+                const t = treatmentByCode(code);
+                return (
+                  <li key={code}>
+                    <strong>{t?.label ?? code}</strong>
+                    {t?.blurb ? (
+                      <span className="muted"> — {t.blurb}</span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
+      ) : null}
+
+      {flaws.length > 0 || item.flawNotes ? (
+        <>
+          <h3>What isn&apos;t perfect</h3>
+          <div className="notice notice-warn">
+            <strong>These are secondhand, so here&apos;s the honest bit</strong>
+            <ul className="tight" style={{ margin: "0.5rem 0 0" }}>
+              {flaws.map((code) => {
+                const f = flawByCode(code);
+                return (
+                  <li key={code}>
+                    <strong>{f?.label ?? code}</strong>
+                    {f?.blurb ? (
+                      <span className="muted"> — {f.blurb}</span>
+                    ) : null}
+                  </li>
+                );
+              })}
+              {item.flawNotes ? <li>{item.flawNotes}</li> : null}
+            </ul>
+            <p className="small" style={{ margin: "0.6rem 0 0" }}>
+              I&apos;d rather tell you now than have you open the box and find
+              it. If any of this is a dealbreaker, don&apos;t buy them.
+            </p>
+          </div>
+        </>
+      ) : null}
+
+      {item.status !== "SOLD" ? (
+        <>
+          <h3>Check what these go for</h3>
+          <p className="small muted">
+            Don&apos;t take my word for the price. These open a search for this
+            exact pair so you can see what a new one costs.
+          </p>
+          <div className="linkgrid">
+            {valueLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="linkcard"
+              >
+                <div className="lc-name">{link.label}</div>
+                <div className="lc-hint">
+                  {link.label === "StockX"
+                    ? "What a deadstock pair sells for right now."
+                    : link.label === "GOAT"
+                      ? "Used pairs listed by condition."
+                      : "Prices across the resale sites in one go."}
+                </div>
+              </a>
+            ))}
+          </div>
+        </>
+      ) : null}
+
       {buyable ? (
         paymentsOn ? (
           <form action={checkoutAction} style={{ marginTop: "1rem" }}>
@@ -198,7 +333,6 @@ export default async function ShoePage({
         )
       ) : null}
 
-      <div className="footer">{settings.contactLine}</div>
     </PublicShell>
   );
 }

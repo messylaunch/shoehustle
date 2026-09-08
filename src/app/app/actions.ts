@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { parseBpsOr, parseCents, parseCentsOr } from "@/lib/money";
+import { formatCents, parseBpsOr, parseCents, parseCentsOr } from "@/lib/money";
+import { isValidHandle, normalizeHandle } from "@/lib/affiliate";
+import { reserveMet } from "@/lib/auction";
+import { hasPushKeys } from "@/lib/config";
+import { notifySizeWatchers } from "@/lib/push";
 import { identifyShoe, IdentifyUnavailableError } from "@/lib/identify";
 import type { IdentifyResult } from "@/lib/identify";
 import { filesFrom, storePhoto, UploadError } from "@/lib/uploads";
@@ -165,6 +169,11 @@ export async function updateItemAction(formData: FormData) {
       listPriceCents: parseCents(formData.get("listPrice")),
       acquiredFrom: String(formData.get("acquiredFrom") ?? "").trim() || null,
       notes: String(formData.get("notes") ?? "").trim() || null,
+      marketNewCents: parseCents(formData.get("marketNew")),
+      // Checkbox groups arrive as repeated fields; store them comma-joined.
+      flaws: formData.getAll("flaws").map(String).join(",") || null,
+      flawNotes: String(formData.get("flawNotes") ?? "").trim() || null,
+      treatments: formData.getAll("treatments").map(String).join(",") || null,
       restorationNotes:
         String(formData.get("restorationNotes") ?? "").trim() || null,
       restorationEta: etaRaw ? new Date(etaRaw) : null,
@@ -569,4 +578,174 @@ export async function revokeInviteAction(formData: FormData) {
   await prisma.invite.delete({ where: { id } });
   revalidatePath("/app/sellers");
   redirect("/app/sellers");
+}
+
+/**
+ * Turns someone into a reseller: gives them a handle for their link and sets
+ * what share of the margin they earn.
+ */
+export async function setResellerAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const isReseller = formData.get("isReseller") === "on";
+  const rawHandle = String(formData.get("handle") ?? "");
+  const handle = rawHandle.trim() ? normalizeHandle(rawHandle) : null;
+
+  if (isReseller && (!handle || !isValidHandle(handle))) {
+    redirect("/app/sellers?error=handle");
+  }
+
+  // Handles live in a URL, so two people can't share one.
+  if (handle) {
+    const clash = await prisma.user.findUnique({ where: { handle } });
+    if (clash && clash.id !== id) redirect("/app/sellers?error=handletaken");
+  }
+
+  await prisma.user.update({
+    where: { id },
+    data: {
+      isReseller,
+      handle,
+      commissionBps: parseBpsOr(formData.get("commissionPercent"), 3000),
+    },
+  });
+
+  revalidatePath("/app/sellers");
+  redirect("/app/sellers?saved=1");
+}
+
+// ---------------------------------------------------------------------------
+// The weekly drop
+// ---------------------------------------------------------------------------
+
+export async function createDropAction(formData: FormData) {
+  const user = await requireUser();
+  const itemId = String(formData.get("itemId") ?? "");
+
+  const item = await prisma.inventoryItem.findUnique({ where: { id: itemId } });
+  if (!item || (item.sellerId !== user.id && user.role !== "ADMIN")) {
+    redirect("/app/drops?error=item");
+  }
+
+  const endsRaw = String(formData.get("endsAt") ?? "").trim();
+  if (!endsRaw) redirect("/app/drops?error=ends");
+  const endsAt = new Date(endsRaw);
+  if (Number.isNaN(endsAt.getTime()) || endsAt <= new Date()) {
+    redirect("/app/drops?error=ends");
+  }
+
+  await prisma.auction.create({
+    data: {
+      itemId,
+      title: String(formData.get("title") ?? "").trim() || null,
+      startCents: parseCentsOr(formData.get("startPrice"), 2500),
+      reserveCents: parseCents(formData.get("reserve")),
+      incrementCents: parseCentsOr(formData.get("increment"), 500),
+      endsAt,
+    },
+  });
+
+  // A pair being auctioned shouldn't also be buyable at a fixed price.
+  await prisma.inventoryItem.update({
+    where: { id: itemId },
+    data: { status: "RESERVED" },
+  });
+
+  revalidatePath("/app/drops");
+  revalidatePath("/");
+  redirect("/app/drops?created=1");
+}
+
+export async function closeDropAction(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+
+  const auction = await prisma.auction.findUnique({
+    where: { id },
+    include: { item: true, bids: true },
+  });
+  if (!auction) redirect("/app/drops");
+  if (auction.item.sellerId !== user.id && user.role !== "ADMIN") {
+    redirect("/app/drops");
+  }
+
+  const sold = reserveMet(auction, auction.bids);
+
+  await prisma.$transaction([
+    prisma.auction.update({
+      where: { id },
+      data: { status: "CLOSED" },
+    }),
+    // Sold goes to the winner off-app; unsold goes back on the shelf.
+    prisma.inventoryItem.update({
+      where: { id: auction.itemId },
+      data: sold
+        ? { status: "SOLD", soldAt: new Date() }
+        : { status: "LISTED" },
+    }),
+  ]);
+
+  revalidatePath("/app/drops");
+  revalidatePath("/");
+  redirect("/app/drops?closed=1");
+}
+
+export async function cancelDropAction(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+
+  const auction = await prisma.auction.findUnique({
+    where: { id },
+    include: { item: true },
+  });
+  if (!auction) redirect("/app/drops");
+  if (auction.item.sellerId !== user.id && user.role !== "ADMIN") {
+    redirect("/app/drops");
+  }
+
+  await prisma.$transaction([
+    prisma.auction.update({ where: { id }, data: { status: "CANCELLED" } }),
+    prisma.inventoryItem.update({
+      where: { id: auction.itemId },
+      data: { status: "LISTED" },
+    }),
+  ]);
+
+  revalidatePath("/app/drops");
+  revalidatePath("/");
+  redirect("/app/drops");
+}
+
+// ---------------------------------------------------------------------------
+// Telling people
+// ---------------------------------------------------------------------------
+
+/**
+ * Pings only the people watching this pair's size. A blast to everyone about
+ * a size they don't wear is how you get uninstalled.
+ */
+export async function notifySizeAction(formData: FormData) {
+  await requireUser();
+  const itemId = String(formData.get("itemId") ?? "");
+
+  const item = await prisma.inventoryItem.findUnique({
+    where: { id: itemId },
+    include: { shoe: true },
+  });
+  if (!item) redirect("/app/inventory");
+
+  if (!hasPushKeys) {
+    redirect(`/app/inventory/${itemId}?error=nopush`);
+  }
+
+  const result = await notifySizeWatchers(item.size, {
+    title: `Your size just landed — ${item.size}`,
+    body: `${[item.shoe.brand, item.shoe.model].filter(Boolean).join(" ")}${
+      item.listPriceCents ? `, ${formatCents(item.listPriceCents)}` : ""
+    }`,
+    url: `/shoe/${item.id}`,
+    tag: `item-${item.id}`,
+  });
+
+  redirect(`/app/inventory/${itemId}?notified=${result.sent}`);
 }

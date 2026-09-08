@@ -17,6 +17,10 @@ export const hasStripeKeys = Boolean(
 
 export const hasStripeWebhook = Boolean(process.env.STRIPE_WEBHOOK_SECRET);
 
+export const hasPushKeys = Boolean(
+  process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+);
+
 export interface FeatureStatus {
   key: string;
   name: string;
@@ -55,6 +59,15 @@ export function featureStatuses(): FeatureStatus[] {
         "Orders would sit at 'awaiting payment' forever, because nothing tells the app the card cleared. Turn this on before you take a real order.",
       howTo:
         "Run `stripe listen --forward-to localhost:3000/api/webhooks/stripe` and paste the whsec_... it prints into STRIPE_WEBHOOK_SECRET.",
+    },
+    {
+      key: "push",
+      name: "Push notifications",
+      on: hasPushKeys,
+      without:
+        "Shoppers can still install the app to their home screen, but you can't ping them when their size lands — which is the whole point of them installing it.",
+      howTo:
+        "Run `npm run push:keys`, then paste the two values it prints into NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY and restart.",
     },
   ];
 }
