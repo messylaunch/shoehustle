@@ -164,10 +164,114 @@ export default async function GuidePage() {
       <p>
         The size-alert form on the shop is the most valuable thing on this whole
         site. Someone whose size you don't have would otherwise leave and never
-        come back; instead they hand you their email. Check{" "}
+        come back; instead they hand you their email. It also asks who
+        they&apos;re shopping for, so one parent can watch their own size and
+        each of their kids&apos;. Check{" "}
         <Link href="/app/leads">Leads</Link> — it flags anyone waiting on a size
         you now have in stock.
       </p>
+      <p>
+        Shoppers can <strong>install the shop to their phone</strong> and get
+        notified when their size lands. Notifications are targeted by size, so
+        a 10.5 only hears about 10.5s — which is the difference between a useful
+        app and an uninstall. When you list a pair in a size people are
+        watching, the pair&apos;s page shows a &quot;tell them it&apos;s
+        here&quot; button.
+      </p>
+
+      <h2>Being honest about a pair</h2>
+      <p>
+        Every pair carries two lists you tick on its page, and both show to
+        buyers:
+      </p>
+      <ul className="tight">
+        <li>
+          <strong>What you did to them</strong> — deep cleaned, creases pulled,
+          soles brightened, conditioned, protected. This is the pitch. It&apos;s
+          what makes a pair from you different from a pair from a thrift store.
+        </li>
+        <li>
+          <strong>What isn&apos;t perfect</strong> — no insoles, replacement
+          insoles, scuffs that didn&apos;t come out, yellowing, no box. This is
+          the trust.
+        </li>
+      </ul>
+      <div className="notice notice-info">
+        <strong>Over-disclose. Always.</strong>
+        <span className="small">
+          At your margins, one refund plus return shipping wipes out two sales.
+          A buyer who was told up front bought them anyway; a buyer who found
+          out from the box wants their money back and never comes back. The
+          honesty list isn&apos;t a nice-to-have, it&apos;s margin protection.
+        </span>
+      </div>
+      <p>
+        The public page also shows the new price struck through next to yours,
+        with links to StockX, GOAT and Google Shopping — so a buyer can check
+        the market instead of taking your word for the deal.
+      </p>
+
+      <h2>The network</h2>
+      <p>
+        There are two ways somebody else makes money on your stock, and they
+        are different arrangements. Both pay the same, so a reseller picks
+        whichever suits them rather than whichever pays better.
+      </p>
+      <ul className="tight">
+        <li>
+          <strong>They share their link</strong> (<em>/r/their-handle</em>). A
+          buyer comes through it and buys at your normal price. You ship it.
+          They earn a share of the margin — 30% by default. They never touch
+          the shoe or the money, and the credit lasts 30 days from the click.
+        </li>
+        <li>
+          <strong>They buy at reseller price.</strong> They pay you less for the
+          pair and sell it however they like at whatever price they like. Their
+          money is at risk if it doesn&apos;t sell.
+        </li>
+      </ul>
+      <p>
+        Turn someone into a reseller on{" "}
+        <Link href="/app/sellers">Sellers</Link> — tick the box, give them a
+        handle, set their share.{" "}
+        <Link href="/app/network">Network</Link> shows your own link, what
+        you&apos;ve earned, and what you owe everyone else.
+      </p>
+      <div className="notice notice-warn">
+        <strong>Commission is tracked, not transferred</strong>
+        <span className="small">
+          The card payment lands with you in full. The Network page totals what
+          you owe each person and you send it however you normally would.
+          Automatic third-party payouts are a much bigger build — worth doing
+          at five resellers, not one.
+        </span>
+      </div>
+
+      <h2>The weekly drop</h2>
+      <p>
+        One pair, a countdown, public bidding. Run it the same day every week
+        and people learn to show up — that habit is worth more than what any
+        single pair sells for.
+      </p>
+      <ul className="tight">
+        <li>
+          <strong>Use a pair people want</strong>, not the one you&apos;re stuck
+          with. A dud teaches people to ignore the drop.
+        </li>
+        <li>
+          <strong>Open low.</strong> $25 pulls ten people in. $60 gets nobody,
+          and an empty auction looks worse than no auction.
+        </li>
+        <li>
+          <strong>Set a reserve</strong> if you&apos;d regret selling cheap.
+          Bidders never see it.
+        </li>
+        <li>
+          <strong>Nobody&apos;s card is charged.</strong> You contact the winner
+          and they pay then. Only the person who just lost the lead gets a
+          notification.
+        </li>
+      </ul>
 
       <h2>Getting paid</h2>
       <p>

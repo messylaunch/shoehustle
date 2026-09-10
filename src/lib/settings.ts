@@ -25,7 +25,10 @@ const DEFAULTS: SiteSettings = {
 };
 
 export async function getSettings(): Promise<SiteSettings> {
-  const rows = await prisma.setting.findMany();
+  // The root layout reads this, so a database that isn't there yet — during a
+  // build, or before the first `npm run setup` — must not take the whole app
+  // down. Fall back to the defaults and carry on.
+  const rows = await prisma.setting.findMany().catch(() => []);
   const map = new Map(rows.map((r) => [r.key, r.value]));
   return {
     shopName: map.get("shopName") || DEFAULTS.shopName,
