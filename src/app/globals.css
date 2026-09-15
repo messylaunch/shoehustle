@@ -575,6 +575,151 @@ th.right {
   border-width: 2px;
 }
 
+/* ---------- grade card ---------- */
+
+.gradecard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+.gc-head {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+.gc-score {
+  display: flex;
+  align-items: baseline;
+  background: var(--ink);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 0.35rem 0.6rem;
+}
+.gc-num {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.gc-outof {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin-left: 0.1rem;
+}
+.gc-verdict {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.gc-blurb {
+  font-size: 0.87rem;
+  color: var(--ink-2);
+}
+
+.gc-parts {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.8rem 0;
+}
+.gc-part {
+  display: grid;
+  grid-template-columns: 5.5rem auto 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+.gc-part-name {
+  font-weight: 600;
+}
+.gc-part-word {
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}
+.bar {
+  display: inline-flex;
+  gap: 3px;
+}
+.pip {
+  width: 15px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.pip.on {
+  background: var(--good);
+  border-color: var(--good);
+}
+
+.gc-process {
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+}
+.gc-process-head {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 0.45rem;
+}
+.gc-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.gc-step {
+  font-size: 0.78rem;
+  background: var(--good-bg);
+  color: var(--good);
+  padding: 0.14rem 0.45rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.gc-foot {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  margin: 0.8rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--line);
+}
+
+/* ---------- rating inputs ---------- */
+
+.rate-row {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.rate-row .rate-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.rate-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.rate-opts label {
+  font-weight: 400;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+.rate-opts input {
+  width: auto;
+  margin: 0;
+}
+
 hr {
   border: 0;
   border-top: 1px solid var(--line);

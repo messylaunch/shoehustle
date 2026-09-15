@@ -169,6 +169,18 @@ export function requestStatusLabel(code: string) {
   return REQUEST_STATUSES.find((s) => s.code === code)?.label ?? code;
 }
 
+export const TRADE_STATUSES = [
+  { code: "NEW", label: "New offer" },
+  { code: "OFFERED", label: "Quoted them" },
+  { code: "ACCEPTED", label: "They accepted" },
+  { code: "RECEIVED", label: "Shoes in hand" },
+  { code: "DECLINED", label: "Passed" },
+] as const;
+
+export function tradeStatusLabel(code: string) {
+  return TRADE_STATUSES.find((s) => s.code === code)?.label ?? code;
+}
+
 export const COMP_SOURCES = [
   { code: "STOCKX", label: "StockX" },
   { code: "EBAY", label: "eBay" },
@@ -265,6 +277,21 @@ export const TREATMENTS = [
   { code: "REGLUED", label: "Reglued", blurb: "Loose sections bonded back down properly." },
   { code: "NEW_LACES", label: "Fresh laces", blurb: "New laces fitted." },
   { code: "NEW_INSOLES", label: "New insoles", blurb: "Clean insoles fitted." },
+  {
+    code: "UV_SANITIZED",
+    label: "UV sanitised",
+    blurb: "Run under UV to kill what's living in them. Nobody else does this.",
+  },
+  {
+    code: "REPAINTED",
+    label: "Touched up with paint",
+    blurb: "Worn colour brought back. Some buyers want this, some don't — so it's stated.",
+  },
+  {
+    code: "DEODORISED",
+    label: "Deodorised",
+    blurb: "Treated inside, not just sprayed over.",
+  },
 ] as const;
 
 export function treatmentByCode(code: string) {

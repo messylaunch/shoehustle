@@ -26,6 +26,7 @@ export default async function AppLayout({
             <Link href="/app/inventory">Inventory</Link>
             <Link href="/app/orders">Orders</Link>
             <Link href="/app/leads">Leads</Link>
+            <Link href="/app/pickups">Meets</Link>
             <Link href="/app/drops">Drops</Link>
             <Link href="/app/network">Network</Link>
             <Link href="/app/playbook">Playbook</Link>

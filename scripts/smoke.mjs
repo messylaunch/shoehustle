@@ -236,7 +236,76 @@ try {
   await expectText("Bids start at \\$30\\.00", "under-increment bid rejected");
   await page.screenshot({ path: `${OUT}/shot-drop.png`, fullPage: true });
 
-  // 14. PWA manifest is served and points at real icons.
+  // 14. Cancel the drop, which should put the held pair back on sale.
+  await page.goto(`${BASE}/app/drops`);
+  await page.click('form:has(button:text("Cancel")) button[type="submit"]');
+  await page.waitForLoadState("load");
+  passed++;
+  console.log("OK  drop cancelled, pair released");
+
+  // 15. Grade the pair and check the card reaches buyers.
+  await page.goto(`${BASE}/app/inventory`);
+  await page.click("table tbody tr td a");
+  await page.waitForSelector('input[name="ratingUpper"]');
+  for (const [part, score] of [
+    ["ratingUpper", "4"],
+    ["ratingMidsole", "3"],
+    ["ratingOutsole", "4"],
+    ["ratingInsole", "5"],
+    ["ratingSmell", "5"],
+  ]) {
+    await page.check(`input[name="${part}"][value="${score}"]`);
+  }
+  await page.selectOption('form:has(select[name="status"]) select[name="status"]', "LISTED");
+  await page.click('form:has(select[name="status"]) button[type="submit"]');
+  await expectText("Saved", "grade card saved");
+  // Weighted toward the worst part: mean 4.2, worst 3 -> 8.
+  await expectExact(".gc-num", "8", "overall computed from the parts");
+
+  const gradedUrl = page.url().replace("/app/inventory/", "/shoe/").split("?")[0];
+  await page.goto(gradedUrl);
+  await expectExact(".gc-num", "8", "grade card shows on the public page");
+  await expectText("Excellent", "grade is translated into plain words");
+  await expectText("What I did to them", "grade card lists the process");
+
+  // 15. Pickup meet, and the buyer's choice at checkout.
+  await page.goto(`${BASE}/app/pickups`);
+  await page.fill('form:has(input[name="address"]) input[name="name"]', "Saturday lot");
+  await page.fill('form:has(input[name="address"]) input[name="city"]', "Dayton");
+  await page.fill(
+    'form:has(input[name="address"]) input[name="address"]',
+    "Kroger lot, 4th & Main",
+  );
+  await page.click('form:has(input[name="address"]) button[type="submit"]');
+  await expectText("Saved", "pickup meet created");
+  await expectText("Saturdays 12pm", "meet reads back in plain words");
+
+  await page.goto(BASE);
+  await expectText("Pick up free", "meets are promoted on the shop");
+  await page.goto(gradedUrl);
+  await expectText("How do you want them\\?", "buyer gets a fulfilment choice");
+
+  // 16. Trade-in intake.
+  await page.goto(`${BASE}/trade`);
+  await page.fill("#t-name", "Ray Alvarez");
+  await page.fill("#t-email", "ray@example.com");
+  await page.fill("#t-desc", "Three pairs my son outgrew");
+  await page.fill("#t-condition", "Worn, midsoles yellow");
+  await page.click('form:has(#t-name) button[type="submit"]');
+  await expectText("Got it", "trade-in offer submitted");
+
+  await page.goto(`${BASE}/app/leads`);
+  await expectText("Three pairs my son outgrew", "trade-in reaches the back office");
+  await expectText("As shop credit", "can quote cash and credit");
+
+  // 17. The split maths that settles the 70/30 question.
+  await page.goto(`${BASE}/app/network`);
+  await expectText("of the sale price", "shows 70% of revenue as a reading");
+  await expectText("of the margin", "shows 70% of margin as a reading");
+  await expectText("Always split the margin", "warns which base to use");
+  await page.screenshot({ path: `${OUT}/shot-splits.png`, fullPage: true });
+
+  // 18. PWA manifest is served and points at real icons.
   const manifestRes = await page.goto(`${BASE}/manifest.webmanifest`);
   const manifest = JSON.parse(await manifestRes.text());
   if (!manifest.icons?.length || manifest.display !== "standalone") {
@@ -251,7 +320,7 @@ try {
   passed++;
   console.log("OK  PWA manifest and every icon it names are served");
 
-  // 15. Remaining seller pages render.
+  // 19. Remaining seller pages render.
   for (const path of [
     "/app",
     "/app/playbook",
@@ -261,6 +330,8 @@ try {
     "/app/inventory",
     "/app/network",
     "/app/drops",
+    "/app/pickups",
+    "/app/leads",
     "/app/guide",
   ]) {
     const res = await page.goto(`${BASE}${path}`);

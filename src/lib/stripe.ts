@@ -140,6 +140,8 @@ export interface CheckoutInput {
   priceCents: number;
   shippingCents: number;
   platformFeeCents: number;
+  /** Collecting in person: no shipping line, no address to collect. */
+  isPickup?: boolean;
 }
 
 export async function createCheckoutSession(
@@ -172,16 +174,21 @@ export async function createCheckoutSession(
         },
       },
     ],
-    shipping_options: [
-      {
-        shipping_rate_data: {
-          type: "fixed_amount",
-          fixed_amount: { amount: shippingCents, currency: "usd" },
-          display_name: "Shipping",
-        },
-      },
-    ],
-    shipping_address_collection: { allowed_countries: ["US"] },
+    shipping_options: input.isPickup
+      ? undefined
+      : [
+          {
+            shipping_rate_data: {
+              type: "fixed_amount",
+              fixed_amount: { amount: shippingCents, currency: "usd" },
+              display_name: "Shipping",
+            },
+          },
+        ],
+    // No point asking a pickup buyer for an address they'll never use.
+    shipping_address_collection: input.isPickup
+      ? undefined
+      : { allowed_countries: ["US"] },
     phone_number_collection: { enabled: true },
     automatic_tax: taxEnabled ? { enabled: true } : undefined,
     payment_intent_data: {

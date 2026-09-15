@@ -18,6 +18,7 @@ export default async function PublicShell({
           </Link>
           <nav>
             <Link href="/">Shop</Link>
+            <Link href="/trade">Sell or trade</Link>
             <Link href="/restoration">Restore my pair</Link>
             <Link href="/login">Seller login</Link>
           </nav>

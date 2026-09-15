@@ -3,6 +3,7 @@ import {
   auctionState,
   highBid,
   isAcceptingBids,
+  maximumBidCents,
   minimumBidCents,
   outbidEmails,
   rejectBid,
@@ -96,6 +97,27 @@ describe("rejectBid", () => {
     expect(rejectBid(live, [], 0, NOW)).not.toBeNull();
     expect(rejectBid(live, [], -100, NOW)).not.toBeNull();
     expect(rejectBid(live, [], Number.NaN, NOW)).not.toBeNull();
+  });
+
+  // One joke bid would otherwise lock out every real bidder for the week,
+  // with the pair held off sale the whole time.
+  it("rejects an absurd bid that would kill the drop", () => {
+    expect(rejectBid(live, [], 500_000, NOW)?.reason).toMatch(/capped/i);
+  });
+
+  it("still allows a strong genuine bid", () => {
+    // Opens at $25, so a $200 bid is high but plausible.
+    expect(rejectBid(live, [], 20_000, NOW)).toBeNull();
+  });
+});
+
+describe("maximumBidCents", () => {
+  it("scales off the reserve when there is one", () => {
+    expect(maximumBidCents({ ...live, reserveCents: 5000 })).toBe(100_000);
+  });
+
+  it("falls back to the opening price", () => {
+    expect(maximumBidCents(live)).toBe(50_000);
   });
 });
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PublicShell from "@/components/PublicShell";
+import GradeCard from "@/components/GradeCard";
 import { GradeBadge, Notice, StatusBadge } from "@/components/ui";
 import { prisma } from "@/lib/db";
 import { canTakePayments } from "@/lib/config";
@@ -21,6 +22,7 @@ import { researchLinks, shoeName } from "@/lib/research";
 import { resellerPriceCents } from "@/lib/affiliate";
 import { currentUser } from "@/lib/auth";
 import { referringReseller } from "@/lib/referral";
+import { formatMeet } from "@/lib/pickup";
 import { getSettings } from "@/lib/settings";
 import { checkoutAction } from "@/app/actions";
 
@@ -115,6 +117,11 @@ export default async function ShoePage({
   const valueLinks = researchLinks(item.shoe, { size: item.size }).filter((l) =>
     ["StockX", "Google Shopping", "GOAT"].includes(l.label),
   );
+
+  const meets = await prisma.pickupLocation.findMany({
+    where: { active: true },
+    orderBy: { dayOfWeek: "asc" },
+  });
 
   const checkoutMessage: Record<string, { kind: "warn" | "bad"; text: string }> =
     {
@@ -211,6 +218,12 @@ export default async function ShoePage({
         </Notice>
       ) : null}
 
+      <GradeCard
+        ratings={item}
+        overall={item.ratingOverall}
+        treatments={item.treatments}
+      />
+
       <div className="card">
         <p className="small">
           <strong>Condition: {grade?.label ?? item.grade}</strong>
@@ -222,27 +235,6 @@ export default async function ShoePage({
         </p>
         {item.notes ? <p className="small">{item.notes}</p> : null}
       </div>
-
-      {treatments.length > 0 ? (
-        <>
-          <h3>What I did to them</h3>
-          <div className="card">
-            <ul className="tight" style={{ marginBottom: 0 }}>
-              {treatments.map((code) => {
-                const t = treatmentByCode(code);
-                return (
-                  <li key={code}>
-                    <strong>{t?.label ?? code}</strong>
-                    {t?.blurb ? (
-                      <span className="muted"> — {t.blurb}</span>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </>
-      ) : null}
 
       {flaws.length > 0 || item.flawNotes ? (
         <>
@@ -269,6 +261,96 @@ export default async function ShoePage({
             </p>
           </div>
         </>
+      ) : null}
+
+      {buyable ? (
+        paymentsOn ? (
+          <form action={checkoutAction} style={{ marginTop: "1rem" }}>
+            <input type="hidden" name="itemId" value={item.id} />
+
+            {meets.length > 0 ? (
+              <div className="card" style={{ marginBottom: "0.8rem" }}>
+                <h3 style={{ marginTop: 0 }}>How do you want them?</h3>
+                <label
+                  style={{ fontWeight: 400, display: "block", marginBottom: "0.5rem" }}
+                >
+                  <input
+                    type="radio"
+                    name="fulfillment"
+                    value="PICKUP"
+                    defaultChecked
+                    style={{ width: "auto", marginRight: "0.4rem" }}
+                  />
+                  <strong>Pick it up — free</strong>
+                </label>
+                <div className="field" style={{ marginLeft: "1.3rem" }}>
+                  <select name="pickupLocationId" defaultValue={meets[0].id}>
+                    {meets.map((meet) => (
+                      <option key={meet.id} value={meet.id}>
+                        {formatMeet(meet)}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="hint">
+                    {meets[0].notes ??
+                      "Same spot, same time, every week. I'll have them with me."}
+                  </div>
+                </div>
+
+                <label style={{ fontWeight: 400, display: "block" }}>
+                  <input
+                    type="radio"
+                    name="fulfillment"
+                    value="SHIPPING"
+                    style={{ width: "auto", marginRight: "0.4rem" }}
+                  />
+                  <strong>
+                    Ship them — {formatCents(item.seller.buyerShippingCents)}
+                  </strong>
+                </label>
+              </div>
+            ) : (
+              <input type="hidden" name="fulfillment" value="SHIPPING" />
+            )}
+
+            <button className="btn btn-primary btn-block" type="submit">
+              Buy — {formatCents(item.listPriceCents)}
+            </button>
+            <p className="tiny" style={{ marginTop: "0.5rem" }}>
+              {meets.length > 0
+                ? "Paid before you collect, so nobody's handling cash at the meet. "
+                : `Shipping ${formatCents(item.seller.buyerShippingCents)}, added at checkout. `}
+              Card handled by Stripe.
+            </p>
+          </form>
+        ) : (
+          <div style={{ marginTop: "1rem" }}>
+            {meets.length > 0 ? (
+              <Notice kind="good" title="How do you want them?">
+                <span className="small">
+                  Pick up free at {meets.map((m) => formatMeet(m)).join(" or ")}
+                  , or I&apos;ll ship them for{" "}
+                  {formatCents(item.seller.buyerShippingCents)}. Say which when
+                  you message me.
+                </span>
+              </Notice>
+            ) : null}
+            {settings.contactUrl ? (
+              <a
+                className="btn btn-primary btn-block"
+                href={settings.contactUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                Message to buy
+              </a>
+            ) : (
+              <Notice kind="info" title="Message me to buy">
+                {settings.contactLine}
+              </Notice>
+            )}
+          </div>
+        )
       ) : null}
 
       {item.status !== "SOLD" ? (
@@ -300,39 +382,6 @@ export default async function ShoePage({
           </div>
         </>
       ) : null}
-
-      {buyable ? (
-        paymentsOn ? (
-          <form action={checkoutAction} style={{ marginTop: "1rem" }}>
-            <input type="hidden" name="itemId" value={item.id} />
-            <button className="btn btn-primary btn-block" type="submit">
-              Buy — {formatCents(item.listPriceCents)}
-            </button>
-            <p className="tiny" style={{ marginTop: "0.5rem" }}>
-              Shipping {formatCents(item.seller.buyerShippingCents)}, added at
-              checkout. Card handled by Stripe.
-            </p>
-          </form>
-        ) : (
-          <div style={{ marginTop: "1rem" }}>
-            {settings.contactUrl ? (
-              <a
-                className="btn btn-primary btn-block"
-                href={settings.contactUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                Message to buy
-              </a>
-            ) : (
-              <Notice kind="info" title="Message me to buy">
-                {settings.contactLine}
-              </Notice>
-            )}
-          </div>
-        )
-      ) : null}
-
     </PublicShell>
   );
 }

@@ -106,13 +106,26 @@ async function onCheckoutCompleted(session: Stripe.Checkout.Session) {
 async function onCheckoutExpired(session: Stripe.Checkout.Session) {
   const order = await prisma.order.findUnique({
     where: { stripeSessionId: session.id },
+    include: { item: true },
   });
   if (!order || order.status !== "PENDING") return;
 
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { status: "CANCELLED" },
-  });
+  await prisma.$transaction([
+    prisma.order.update({
+      where: { id: order.id },
+      data: { status: "CANCELLED" },
+    }),
+    // Put the pair back on sale. It was held when checkout started so two
+    // people couldn't buy it at once; they walked away, so release it.
+    ...(order.item.status === "RESERVED"
+      ? [
+          prisma.inventoryItem.update({
+            where: { id: order.itemId },
+            data: { status: "LISTED" },
+          }),
+        ]
+      : []),
+  ]);
 }
 
 async function onRefunded(charge: Stripe.Charge) {

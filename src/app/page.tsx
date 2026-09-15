@@ -8,6 +8,7 @@ import { shoeName } from "@/lib/research";
 import { getSettings } from "@/lib/settings";
 import { referringReseller } from "@/lib/referral";
 import { auctionState, highBid, timeRemaining } from "@/lib/auction";
+import { formatMeet } from "@/lib/pickup";
 import InstallPrompt from "@/components/InstallPrompt";
 import { sizeAlertAction } from "./actions";
 
@@ -36,6 +37,11 @@ export default async function StorefrontPage({
     orderBy: { endsAt: "asc" },
   });
   const auctionTop = liveAuction ? highBid(liveAuction.bids) : null;
+
+  const meets = await prisma.pickupLocation.findMany({
+    where: { active: true },
+    orderBy: { dayOfWeek: "asc" },
+  });
 
   const items = await prisma.inventoryItem.findMany({
     where: {
@@ -124,6 +130,17 @@ export default async function StorefrontPage({
             ))}
           </div>
         </>
+      ) : null}
+
+      {meets.length > 0 ? (
+        <div className="notice notice-good" style={{ marginTop: "1rem" }}>
+          <strong>Pick up free, no shipping wait</strong>
+          <span className="small">
+            {meets.map((meet) => formatMeet(meet)).join(" · ")}. Buy on here
+            first, then come and grab them — everything&apos;s paid for before
+            the meet, so it&apos;s a thirty-second handover.
+          </span>
+        </div>
       ) : null}
 
       <h2>
@@ -245,9 +262,14 @@ export default async function StorefrontPage({
       <h2>Beat-up pair you still love?</h2>
       <div className="card">
         <p className="small">{settings.restorationBlurb}</p>
-        <Link className="btn" href="/restoration">
-          Get a restoration quote
-        </Link>
+        <div className="row">
+          <Link className="btn" href="/restoration">
+            Get a restoration quote
+          </Link>
+          <Link className="btn btn-ghost" href="/trade">
+            Sell or trade your old pairs
+          </Link>
+        </div>
       </div>
     </PublicShell>
   );

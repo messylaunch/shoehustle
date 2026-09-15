@@ -47,6 +47,19 @@ model User {
   isReseller    Boolean @default(false)
   commissionBps Int     @default(3000)
 
+  // Network side. A HOLDER physically keeps stock in their city and runs the
+  // pickup meets; a SELLER finds buyers and holds nothing. Both are paid out
+  // of the margin, never out of the seller's pocket.
+  isHolder  Boolean @default(false)
+  city      String?
+  // Their share of the margin, in basis points, when they play that part on
+  // a sale. Someone can be both, in which case they earn both.
+  holderBps Int     @default(1500)
+
+  heldItems       InventoryItem[]  @relation("ItemHolder")
+  pickupLocations PickupLocation[]
+  soldOrders      Order[]          @relation("OrderSoldBy")
+
   sessions       Session[]
   channels       Channel[]
   items          InventoryItem[]
@@ -146,6 +159,25 @@ model InventoryItem {
   flaws     String?
   flawNotes String?
 
+  // The grade card. This is what separates your Reverse Panda from someone
+  // else's identical Reverse Panda: not the photos, the numbers.
+  // Overall is 1-10; the parts are 1-5.
+  ratingOverall Int?
+  ratingUpper   Int?
+  ratingMidsole Int?
+  ratingOutsole Int?
+  ratingInsole  Int?
+  ratingSmell   Int?
+
+  // Which holder physically has this pair right now. Null means it's with
+  // the owner. Customers never see this.
+  holderId String?
+  holder   User?   @relation("ItemHolder", fields: [holderId], references: [id])
+
+  // When it went live, so stock that isn't moving can be surfaced to the
+  // network instead of sitting in one person's closet.
+  listedAt DateTime?
+
   restorationEta   DateTime?
   restorationNotes String?
   // What was actually done to it — becomes the "how it was treated" list
@@ -225,6 +257,21 @@ model Order {
   resellerId       String?
   reseller         User?   @relation("OrderReseller", fields: [resellerId], references: [id])
   resellerCutCents Int     @default(0)
+
+  // Who actually closed it, when a person in the network made the sale
+  // rather than the shop doing it on its own.
+  soldById       String?
+  soldBy         User?   @relation("OrderSoldBy", fields: [soldById], references: [id])
+  sellerCutCents Int     @default(0)
+  holderCutCents Int     @default(0)
+
+  // How it gets to the buyer. Pickup is the default because it's worth about
+  // double a shipped sale.
+  fulfillment      String          @default("SHIPPING") // PICKUP | DELIVERY | SHIPPING
+  pickupLocationId String?
+  pickupLocation   PickupLocation? @relation(fields: [pickupLocationId], references: [id])
+  pickupAt         DateTime?
+  handedOverAt     DateTime?
 
   status                String  @default("PENDING") // PENDING | PAID | SHIPPED | CANCELLED | REFUNDED
   stripeSessionId       String? @unique
@@ -327,4 +374,57 @@ model RestorationRequest {
 model Setting {
   key   String @id
   value String
+}
+
+// Where and when you hand shoes over. The whole "shoe guy" model runs on
+// this being the same place at the same time every week, so people can plan
+// around it. Everything is paid for before the meet - nobody is standing in
+// a parking lot counting cash.
+model PickupLocation {
+  id       String  @id @default(cuid())
+  name     String
+  address  String
+  city     String
+  notes    String?
+  // 0 = Sunday. Kept as a weekly slot rather than individual dates because
+  // predictability is the point.
+  dayOfWeek Int
+  startTime String // "18:00"
+  endTime   String // "19:30"
+  active    Boolean @default(true)
+
+  // Whoever runs this meet and holds the stock for it.
+  holderId String?
+  holder   User?   @relation(fields: [holderId], references: [id])
+
+  orders Order[]
+
+  @@index([active, dayOfWeek])
+}
+
+// Somebody offering you their old pairs, for cash or credit. The car-lot
+// trade-in, which is also your cheapest source of inventory.
+model TradeIn {
+  id     String  @id @default(cuid())
+  name   String
+  email  String
+  phone  String?
+  city   String?
+
+  description String
+  brand       String?
+  size        String?
+  condition   String?
+  photoUrl    String?
+
+  // NEW -> OFFERED -> ACCEPTED -> RECEIVED -> DECLINED
+  status      String @default("NEW")
+  // What you'll pay in cash, and what you'd give as shop credit instead.
+  offerCents  Int?
+  creditCents Int?
+  notes       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
 }

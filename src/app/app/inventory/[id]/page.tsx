@@ -17,6 +17,8 @@ import {
   parseTreatments,
 } from "@/lib/constants";
 import { hasPushKeys } from "@/lib/config";
+import { PART_SCALE, RATING_PARTS, suggestedOverall } from "@/lib/ratings";
+import GradeCard, { ScaleLegend } from "@/components/GradeCard";
 import {
   bestLane,
   buildLanes,
@@ -104,9 +106,16 @@ export default async function ItemPage({
   const links = researchLinks(item.shoe, { size: item.size });
   const selectedFlaws = parseFlaws(item.flaws);
   const selectedTreatments = parseTreatments(item.treatments);
+  const suggested = suggestedOverall(item);
 
   // How many people are waiting on this size — the reason to hit "tell them".
   const watching = await prisma.sizeAlert.count({ where: { size: item.size } });
+
+  const holders = await prisma.user.findMany({
+    where: { isHolder: true, active: true },
+    select: { id: true, name: true, city: true },
+    orderBy: { name: "asc" },
+  });
 
   const actualProfit =
     best && best.sellCents !== null && item.costCents > 0
@@ -189,6 +198,17 @@ export default async function ItemPage({
       ) : null}
       {sp.error === "price" ? (
         <Notice kind="bad">A comp needs a price above zero.</Notice>
+      ) : null}
+
+      {item.ratingOverall != null || selectedTreatments.length > 0 ? (
+        <>
+          <h2>What buyers see</h2>
+          <GradeCard
+            ratings={item}
+            overall={item.ratingOverall}
+            treatments={item.treatments}
+          />
+        </>
       ) : null}
 
       {/* ---------------- the verdict ---------------- */}
@@ -606,20 +626,44 @@ export default async function ItemPage({
                 defaultValue={centsToInput(item.costCents)}
               />
             </Field>
-            <Field label="Asking price" hint="What shows on the shop.">
+            <Field
+              label="Asking price"
+              hint={
+                item.listPriceCents === null && best?.sellCents
+                  ? "Pre-filled from the best lane. Change it or leave it."
+                  : "What shows on the shop. Clearing this takes it off sale."
+              }
+            >
+              {/* A real value, not a placeholder: this field is saved on every
+                  submit, so a placeholder would silently wipe the price and
+                  make checkout bounce. */}
               <input
                 name="listPrice"
                 inputMode="decimal"
-                defaultValue={centsToInput(item.listPriceCents)}
-                placeholder={
-                  best?.sellCents ? centsToInput(best.sellCents) : undefined
-                }
+                defaultValue={centsToInput(
+                  item.listPriceCents ?? best?.sellCents ?? null,
+                )}
               />
             </Field>
           </div>
 
           <Field label="Where you got them">
             <input name="acquiredFrom" defaultValue={item.acquiredFrom ?? ""} />
+          </Field>
+
+          <Field
+            label="Who physically has it"
+            hint="Buyers never see this. It's so you know whose closet to go to when it sells."
+          >
+            <select name="holderId" defaultValue={item.holderId ?? ""}>
+              <option value="">Me</option>
+              {holders.map((holder) => (
+                <option key={holder.id} value={holder.id}>
+                  {holder.name}
+                  {holder.city ? ` — ${holder.city}` : ""}
+                </option>
+              ))}
+            </select>
           </Field>
 
           <Field label="Ready date" hint="Shows on the shop while it's in restoration.">
@@ -659,6 +703,66 @@ export default async function ItemPage({
               }
             />
           </Field>
+
+          <hr />
+
+          <h3 style={{ marginTop: 0 }}>Grade card</h3>
+          <p className="small muted">
+            This is what separates your pair from an identical one on
+            Marketplace. Score each part 1–5; the overall fills itself in.
+          </p>
+
+          {RATING_PARTS.map((part) => (
+            <div className="rate-row" key={part.key}>
+              <span className="rate-name" title={part.blurb}>
+                {part.label}
+              </span>
+              <div className="rate-opts">
+                <label>
+                  <input
+                    type="radio"
+                    name={part.key}
+                    value=""
+                    defaultChecked={item[part.key] == null}
+                  />
+                  —
+                </label>
+                {PART_SCALE.map((s) => (
+                  <label key={s.score} title={s.blurb}>
+                    <input
+                      type="radio"
+                      name={part.key}
+                      value={s.score}
+                      defaultChecked={item[part.key] === s.score}
+                    />
+                    {s.score}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="cols-2" style={{ marginTop: "0.8rem" }}>
+            <Field
+              label="Overall out of 10"
+              hint={
+                suggested !== null
+                  ? `Suggested: ${suggested}. Leave blank to use it.`
+                  : "Score the parts above and this fills itself in."
+              }
+            >
+              <input
+                name="ratingOverall"
+                inputMode="numeric"
+                defaultValue={item.ratingOverall ?? ""}
+                placeholder={suggested !== null ? String(suggested) : ""}
+              />
+            </Field>
+            <div className="field">
+              <label>The 1–5 scale</label>
+              <ScaleLegend />
+            </div>
+          </div>
 
           <hr />
 

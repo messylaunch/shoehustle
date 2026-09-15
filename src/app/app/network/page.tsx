@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/config";
 import { formatBps, formatCents } from "@/lib/money";
 import { splitBreakdown } from "@/lib/affiliate";
+import { checkDeal, readSeventyThirty, splitSale } from "@/lib/network";
 import { shoeName } from "@/lib/research";
 
 export const metadata = { title: "Network" };
@@ -66,6 +67,18 @@ export default async function NetworkPage() {
 
   // A worked example on a typical pair, so the split is concrete.
   const example = splitBreakdown(6500, 2300, user.commissionBps);
+
+  // The three-part split on a typical $28-in, $65-out pair, plus the reading
+  // that settles what "70/30" is actually a percentage of.
+  const demoInput = {
+    listCents: 6500,
+    costCents: 2800,
+    sellerBps: user.commissionBps,
+    holderBps: user.holderBps,
+  };
+  const demo = splitSale(demoInput);
+  const deal = checkDeal(demoInput);
+  const seventy = readSeventyThirty(6500, 2800);
 
   return (
     <>
@@ -215,6 +228,107 @@ export default async function NetworkPage() {
           </div>
         </>
       ) : null}
+
+      <h2>What &quot;70/30&quot; actually means</h2>
+      <p className="muted small prose">
+        The same sentence is three different deals depending on what the
+        percentage is taken from. On a pair that cost you $28 and lists at $65:
+      </p>
+      <div className="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>70% of…</th>
+              <th className="right">They get</th>
+              <th className="right">You get</th>
+              <th>Works?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {seventy.map((reading) => (
+              <tr key={reading.base}>
+                <td>{reading.base}</td>
+                <td className="right num">{formatCents(reading.theyGet)}</td>
+                <td className="right num">{formatCents(reading.youGet)}</td>
+                <td>
+                  <span
+                    className={`badge ${reading.works ? "badge-good" : "badge-bad"}`}
+                  >
+                    {reading.works ? "yes" : "no"}
+                  </span>
+                  <div className="tiny">{reading.note}</div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Notice kind="warn" title="Always split the margin, never the sale price">
+        <span className="small">
+          70% of the $65 sale price hands over $45.50 and leaves you $19.50
+          against a shoe that cost $28 — you&apos;d lose $8.50 every time
+          somebody sold one for you. 70% of the <em>margin</em> hands over
+          $25.90 and leaves you $11.10 on top of your cost back. Same words,
+          opposite outcome.
+        </span>
+      </Notice>
+
+      <h2>The three parts of a sale</h2>
+      <p className="muted small prose">
+        Somebody can play more than one. In a small town one person usually
+        does both of the paid roles and takes both cuts.
+      </p>
+      <div className="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Part</th>
+              <th>What they do</th>
+              <th className="right">On a $65 pair</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Seller</td>
+              <td className="small">
+                Found the buyer. Holds no stock, carries no risk.
+              </td>
+              <td className="right num">{formatCents(demo.sellerCents)}</td>
+            </tr>
+            <tr>
+              <td>Holder</td>
+              <td className="small">
+                Keeps stock in their town, runs the meet, hands it over.
+              </td>
+              <td className="right num">{formatCents(demo.holderCents)}</td>
+            </tr>
+            <tr>
+              <td>Owner</td>
+              <td className="small">
+                Bought and restored it. Money at risk until it sells.
+              </td>
+              <td className="right num">{formatCents(demo.ownerCents)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div
+        className={`notice ${
+          deal.verdict === "healthy"
+            ? "notice-good"
+            : deal.verdict === "thin"
+              ? "notice-warn"
+              : "notice-bad"
+        }`}
+      >
+        <strong>{deal.headline}</strong>
+        <span className="small">{deal.detail}</span>
+      </div>
+      <p className="small muted">
+        Margin on that pair is {formatCents(demo.marginCents)} — the $65 list
+        price less the $28 it cost. Your cost comes off the top every time,
+        before anybody gets a cut.
+      </p>
 
       {user.role === "ADMIN" ? (
         <>

@@ -1,9 +1,18 @@
 import { Empty, Field, Notice } from "@/components/ui";
-import { requireUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { centsToInput, formatCents } from "@/lib/money";
-import { REQUEST_STATUSES, requestStatusLabel } from "@/lib/constants";
-import { markAlertNotifiedAction, updateRequestAction } from "../actions";
+import {
+  REQUEST_STATUSES,
+  TRADE_STATUSES,
+  requestStatusLabel,
+  tradeStatusLabel,
+} from "@/lib/constants";
+import {
+  markAlertNotifiedAction,
+  updateRequestAction,
+  updateTradeInAction,
+} from "../actions";
 
 export const metadata = { title: "Leads" };
 export const dynamic = "force-dynamic";
@@ -17,16 +26,22 @@ export default async function LeadsPage({
   searchParams: Promise<{ saved?: string }>;
 }) {
   const sp = await searchParams;
-  await requireUser();
+  // Customer contact details belong to the shop, not to every account that
+  // can sign in. A casual seller — possibly a teenager — has no business
+  // reading the whole list of names, emails and phone numbers.
+  await requireAdmin();
 
-  const [alerts, requests, inStock] = await Promise.all([
+  const [alerts, requests, inStock, trades] = await Promise.all([
     prisma.sizeAlert.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.restorationRequest.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.inventoryItem.findMany({
       where: { status: "LISTED" },
       select: { size: true },
     }),
+    prisma.tradeIn.findMany({ orderBy: { createdAt: "desc" } }),
   ]);
+
+  const newTrades = trades.filter((t) => t.status === "NEW").length;
 
   const stockedSizes = new Set(inStock.map((i) => i.size));
   const waiting = alerts.filter((a) => !a.notifiedAt);
@@ -106,6 +121,114 @@ export default async function LeadsPage({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      <h2 id="trades">Trade-ins ({newTrades} new)</h2>
+      <p className="muted small prose">
+        Inventory that walked to you. Quote two numbers — cash, and a higher
+        one as shop credit. Credit costs you less and brings them back.
+      </p>
+      {trades.length === 0 ? (
+        <Empty title="No offers yet">
+          Post about taking trade-ins. People have closets full of pairs they
+          think are worthless and you know how to fix them.
+        </Empty>
+      ) : (
+        <div className="stack">
+          {trades.map((trade) => (
+            <div className="card" key={trade.id}>
+              <div className="spread">
+                <div>
+                  <strong>{trade.description}</strong>
+                  <div className="small muted">
+                    {trade.name} · {trade.email}
+                    {trade.phone ? ` · ${trade.phone}` : ""}
+                    {trade.city ? ` · ${trade.city}` : ""}
+                  </div>
+                  {trade.brand || trade.size ? (
+                    <div className="tiny">
+                      {[trade.brand, trade.size].filter(Boolean).join(" · ")}
+                    </div>
+                  ) : null}
+                </div>
+                <span
+                  className={`badge ${
+                    trade.status === "NEW"
+                      ? "badge-warn"
+                      : trade.status === "RECEIVED"
+                        ? "badge-good"
+                        : ""
+                  }`}
+                >
+                  {tradeStatusLabel(trade.status)}
+                </span>
+              </div>
+
+              {trade.condition ? (
+                <p className="small" style={{ marginTop: "0.5rem" }}>
+                  {trade.condition}
+                </p>
+              ) : null}
+
+              {trade.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={trade.photoUrl}
+                  alt=""
+                  style={{
+                    maxWidth: "260px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--line)",
+                  }}
+                />
+              ) : null}
+
+              <form action={updateTradeInAction} style={{ marginTop: "0.8rem" }}>
+                <input type="hidden" name="id" value={trade.id} />
+                <div className="cols-2">
+                  <Field label="Status">
+                    <select name="status" defaultValue={trade.status}>
+                      {TRADE_STATUSES.map((s) => (
+                        <option key={s.code} value={s.code}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Cash offer">
+                    <input
+                      name="offer"
+                      inputMode="decimal"
+                      defaultValue={centsToInput(trade.offerCents)}
+                      placeholder="40.00"
+                    />
+                  </Field>
+                </div>
+                <Field
+                  label="As shop credit"
+                  hint="Make it 25–40% higher than cash. It costs you less and they spend it here."
+                >
+                  <input
+                    name="credit"
+                    inputMode="decimal"
+                    defaultValue={centsToInput(trade.creditCents)}
+                    placeholder="55.00"
+                  />
+                </Field>
+                <Field label="Notes to yourself">
+                  <textarea name="notes" defaultValue={trade.notes ?? ""} />
+                </Field>
+                <button className="btn" type="submit">
+                  Save
+                </button>
+              </form>
+
+              <div className="tiny" style={{ marginTop: "0.5rem" }}>
+                Came in {trade.createdAt.toLocaleDateString("en-US")}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

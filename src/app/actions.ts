@@ -12,6 +12,7 @@ import { sendToSubscriptions } from "@/lib/push";
 import { createCheckoutSession, platformFeeFor } from "@/lib/stripe";
 import { referralCommissionCents } from "@/lib/affiliate";
 import { referringReseller } from "@/lib/referral";
+import { nextOccurrence } from "@/lib/pickup";
 import { storePhoto, UploadError } from "@/lib/uploads";
 
 // Actions a shopper can trigger. Nothing here requires a login.
@@ -82,6 +83,41 @@ export async function restorationRequestAction(formData: FormData) {
   });
 
   redirect("/restoration?sent=1");
+}
+
+export async function tradeInAction(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const description = String(formData.get("description") ?? "").trim();
+
+  if (!name || !email || !description) redirect("/trade?error=missing");
+
+  let photoUrl: string | null = null;
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    try {
+      photoUrl = (await storePhoto(photo)).url;
+    } catch (error) {
+      // A bad photo shouldn't lose the enquiry — take the rest of it.
+      if (!(error instanceof UploadError)) throw error;
+    }
+  }
+
+  await prisma.tradeIn.create({
+    data: {
+      name,
+      email,
+      phone: String(formData.get("phone") ?? "").trim() || null,
+      city: String(formData.get("city") ?? "").trim() || null,
+      brand: String(formData.get("brand") ?? "").trim() || null,
+      size: String(formData.get("size") ?? "").trim() || null,
+      condition: String(formData.get("condition") ?? "").trim() || null,
+      description,
+      photoUrl,
+    },
+  });
+
+  redirect("/trade?sent=1");
 }
 
 /**
@@ -173,7 +209,21 @@ export async function checkoutAction(formData: FormData) {
   }
 
   const priceCents = item.listPriceCents;
-  const shippingCents = item.seller.buyerShippingCents;
+
+  // Pickup is free and worth roughly double a shipped sale, so it's a real
+  // choice at checkout rather than something buried in the notes.
+  const wantsPickup = String(formData.get("fulfillment") ?? "") === "PICKUP";
+  const pickupLocationId = String(formData.get("pickupLocationId") ?? "") || null;
+
+  const pickupSpot =
+    wantsPickup && pickupLocationId
+      ? await prisma.pickupLocation.findFirst({
+          where: { id: pickupLocationId, active: true },
+        })
+      : null;
+
+  const fulfillment = pickupSpot ? "PICKUP" : "SHIPPING";
+  const shippingCents = pickupSpot ? 0 : item.seller.buyerShippingCents;
   const platformFeeCents = platformFeeFor(
     priceCents,
     item.seller.platformFeeBps,
@@ -201,6 +251,7 @@ export async function checkoutAction(formData: FormData) {
     priceCents,
     shippingCents,
     platformFeeCents,
+    isPickup: Boolean(pickupSpot),
   });
 
   await prisma.order.create({
@@ -216,9 +267,21 @@ export async function checkoutAction(formData: FormData) {
       platformFeeCents,
       resellerId: resellerCutCents > 0 ? reseller?.id : null,
       resellerCutCents,
+      fulfillment,
+      pickupLocationId: pickupSpot?.id ?? null,
+      pickupAt: pickupSpot ? nextOccurrence(pickupSpot) : null,
       status: "PENDING",
       stripeSessionId: session.id,
     },
+  });
+
+  // Hold the pair while they're on the Stripe page. Without this, two people
+  // can start checkout seconds apart and both pay for the same shoe — and
+  // one of them then gets a refund and never comes back. Released again by
+  // the webhook if the session expires.
+  await prisma.inventoryItem.update({
+    where: { id: item.id },
+    data: { status: "RESERVED" },
   });
 
   if (!session.url) {

@@ -85,7 +85,27 @@ export function rejectBid(
       reason: `Bids start at $${(minimum / 100).toFixed(2)} right now.`,
     };
   }
+  const ceiling = maximumBidCents(auction);
+  if (amountCents > ceiling) {
+    return {
+      reason: `Bids are capped at $${(ceiling / 100).toFixed(2)} on this one.`,
+    };
+  }
   return null;
+}
+
+/**
+ * How high a single bid may go.
+ *
+ * Without this, one joke bid of $5,000 locks every real bidder out for the
+ * rest of the week — and the pair is held off sale while it happens, so the
+ * drop costs you the week's marketing and the pair.
+ */
+export const BID_CEILING_MULTIPLE = 20;
+
+export function maximumBidCents(auction: AuctionLike): number {
+  const anchor = auction.reserveCents ?? auction.startCents;
+  return Math.max(anchor * BID_CEILING_MULTIPLE, auction.startCents * 4);
 }
 
 /** True when the top bid clears the reserve, so the pair actually sells. */
