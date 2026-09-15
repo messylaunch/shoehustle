@@ -267,6 +267,7 @@ try {
   await expectExact(".gc-num", "8", "grade card shows on the public page");
   await expectText("Excellent", "grade is translated into plain words");
   await expectText("What I did to them", "grade card lists the process");
+  await page.screenshot({ path: `${OUT}/shot-grade.png`, fullPage: true });
 
   // 15. Pickup meet, and the buyer's choice at checkout.
   await page.goto(`${BASE}/app/pickups`);
