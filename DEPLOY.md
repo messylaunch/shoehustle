@@ -23,18 +23,19 @@ Neon sets some connection strings for you, but **the names may not match what
 the app expects**. Open **Settings → Environment Variables** and make sure
 these two exist, exactly these names:
 
-| Name | What to put in it |
-| --- | --- |
-| `DATABASE_URL` | The **pooled** connection string |
-| `DIRECT_URL` | The **unpooled** / direct connection string |
+| Name | Required? | What to put in it |
+| --- | --- | --- |
+| `DATABASE_URL` | **Yes** | The connection string Neon gives you |
+| `DIRECT_URL` | No | The unpooled string, if migrations ever hang |
 
-Neon usually calls them `DATABASE_URL` and `DATABASE_URL_UNPOOLED`. If so, add
-a new variable called `DIRECT_URL` and paste the unpooled value into it.
+`DIRECT_URL` is **optional** — leave it out and the app uses `DATABASE_URL`
+for migrations too, which is fine at the volumes this shop will see. Neon
+usually calls the unpooled one `DATABASE_URL_UNPOOLED`; if migrations ever
+hang, add `DIRECT_URL` and paste that value in.
 
-> **Why two?** The app uses the pooled one for speed. Database migrations run
-> at build time and need the direct one — connection poolers reject the
-> statements migrations use. If you only have one string, put it in both; it
-> will work, just less efficiently.
+> **Why two at all?** The app uses the pooled connection for speed. Migrations
+> run at build time and prefer a direct one, because connection poolers reject
+> some of the statements migrations use.
 
 ## 2. Photo storage — required
 
@@ -125,8 +126,9 @@ branch and point your local `.env` at that instead.
 
 ## When something goes wrong
 
-**The build fails on `prisma migrate deploy`** — `DIRECT_URL` is missing or
-has the pooled string in it. It needs the direct/unpooled one.
+**The build stops with a boxed "CAN'T REACH A DATABASE" message** — it says
+which of the four steps is missing. That message is the app telling you what
+to do, not a crash.
 
 **The site loads but every page errors** — `DATABASE_URL` is missing or wrong.
 Check it's set for the Production environment specifically, not just Preview.

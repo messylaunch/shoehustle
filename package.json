@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && node scripts/prepare-db.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
@@ -14,7 +14,7 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "setup": "prisma generate && prisma migrate deploy",
+    "setup": "prisma generate && node scripts/prepare-db.mjs",
     "push:keys": "node scripts/gen-vapid.mjs",
     "smoke": "node scripts/smoke.mjs",
     "db:migrate": "prisma migrate dev"
