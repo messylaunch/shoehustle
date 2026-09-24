@@ -1,16 +1,24 @@
-// Shoe Hustle data model.
+// Well Kept data model.
 //
-// SQLite so the app runs with zero setup. Prisma's SQLite connector has no
-// native enums or arrays, so status-style columns are plain strings backed by
-// the constant lists in src/lib/constants.ts. Money is always integer cents.
+// Postgres, because the app is deployed to Vercel and a serverless host has
+// no disk to keep a SQLite file on — it would be wiped on every deploy.
+//
+// Status-style columns are plain strings rather than Postgres enums, backed
+// by the constant lists in src/lib/constants.ts: adding a new status is then
+// a code change, not a migration. Money is always integer cents.
+//
+// DATABASE_URL is the pooled connection (what the app uses). DIRECT_URL is
+// the unpooled one, used only for migrations — connection poolers refuse the
+// statements migrations need to run.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {

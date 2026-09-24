@@ -9,22 +9,32 @@ a reseller network, weekly drops, and honest condition disclosure.
 The shop name is a setting, not a decision you're stuck with. Change it on
 `/app/settings`.
 
-Runs with zero setup. No API keys required — photo ID and card checkout are
-optional extras that switch on when you add keys, and the app tells you
+No API keys required to run — photo ID, card checkout and push notifications
+are optional extras that switch on when you add keys, and the app tells you
 exactly what's off and how to turn it on.
 
-## Running it
+## Deploying it
+
+See **[DEPLOY.md](DEPLOY.md)** — Vercel, a Neon Postgres database and a Blob
+store for photos. Four steps, three of which are required before the build
+will succeed.
+
+## Running it locally
+
+Needs a Postgres to point at; the easiest start is the same Neon database as
+production, or a second Neon branch once you want one you can't break.
 
 ```bash
 npm install
-cp .env.example .env
-npm run setup     # generates the Prisma client and creates the SQLite database
+cp .env.example .env     # paste DATABASE_URL and DIRECT_URL
+npm run setup            # generates the client and creates the tables
 npm run dev
 ```
 
 Open http://localhost:3000. The first visit sends you to `/setup` to create
 your account — that account is the admin and the only one that can invite
-other sellers.
+other sellers. Leave `BLOB_READ_WRITE_TOKEN` unset locally and photos are
+written to `public/uploads` instead of Blob storage.
 
 ## What it does
 
@@ -150,9 +160,9 @@ every icon it names, size-alert capture and the restoration form.
 
 ## Stack
 
-Next.js (App Router) · SQLite via Prisma · plain CSS · Stripe Connect ·
-Claude for photo ID.
+Next.js (App Router) · Postgres via Prisma · plain CSS · Stripe Connect ·
+Vercel Blob for photos · Claude for photo ID.
 
-SQLite keeps setup to nothing. When one machine stops being enough, change the
-`datasource` in `prisma/schema.prisma` to Postgres and move photo storage out
-of `src/lib/uploads.ts` — nothing else in the app knows where either lives.
+Photo storage is isolated in `src/lib/uploads.ts`: it writes to Vercel Blob
+when `BLOB_READ_WRITE_TOKEN` is set and to local disk otherwise, and nothing
+else in the app knows which it got.
